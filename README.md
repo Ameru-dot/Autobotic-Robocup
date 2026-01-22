@@ -146,6 +146,49 @@ the <a href="https://junior.robocup.org/">RoboCup Junior</a> sub-league <a href=
 
 <br/>
 
+## RDK setup and auto-sync
+
+Use this to keep the robot code on the RDK updated automatically after you push to GitHub.
+
+### Laptop (PowerShell)
+```powershell
+cd C:\Users\user\OneDrive\Documents\Autobotic-Robocup
+git init
+git add .
+git commit -m "init"
+git branch -M main
+git remote add origin https://github.com/Ameru-dot/Autobotic-Robocup.git
+git push -u origin main
+```
+
+### RDK (Ubuntu)
+```bash
+git clone https://github.com/Ameru-dot/Autobotic-Robocup.git ~/Autobotic-Robocup
+sudo apt update
+sudo apt install -y cron
+sudo systemctl enable --now cron
+crontab -e
+```
+
+Add this line to the crontab (no leading #):
+```cron
+* * * * * cd /home/sunrise/Autobotic-Robocup && /usr/bin/git pull --ff-only
+```
+
+Check the cron entry:
+```bash
+crontab -l
+```
+
+### VS Code Remote-SSH
+Create `C:\Users\user\.ssh\config`:
+```sshconfig
+Host rdk
+  HostName 192.168.0.29
+  User sunrise
+```
+
+Then in VS Code, use "Remote-SSH: Connect to Host..." and open `/home/sunrise/Autobotic-Robocup`.
 ## Why open source?
 
 <p align="justify">
@@ -185,3 +228,4 @@ Additionally, you can read up one the license [here](https://choosealicense.com/
 ##
 
 **We will answer questions whenever we can, but please don't expect active support for this repository**
+
