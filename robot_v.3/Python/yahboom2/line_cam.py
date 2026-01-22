@@ -485,7 +485,7 @@ def get_exit_angle(box):
     return left_points[-1], right_points[-1], angle
 
 
-def average_direction(turn_direction):
+def average_direction(marker_direction):
     turn_dir_num = 0
 
     if turn_direction == "left":
@@ -739,11 +739,11 @@ def line_cam_loop():
 
                     # Check for green turn signs
                     if len(contours_grn) > 0:
-                        turn_direction = check_green(contours_grn, black_image)
+                        marker_direction = check_green(contours_grn, black_image)
                     else:
-                        turn_direction = "straight"
+                        marker_direction = "straight"
 
-                    time_turn_direction = add_time_value(time_turn_direction, average_direction(turn_direction))
+                    time_turn_direction = add_time_value(time_turn_direction, average_direction(marker_direction))
                     avg_turn_dir = get_time_average(time_turn_direction, .2)
 
                     if avg_turn_dir > .1 and not rotation_y.value == "ramp_up":
@@ -755,20 +755,20 @@ def line_cam_loop():
                     elif avg_turn_dir < -.1 and rotation_y.value == "ramp_up":
                         timer.set_timer("left_marker_up", .8)
 
-                    if (not timer.get_timer("right_marker") or not timer.get_timer("right_marker_up")) and not turn_direction == "turn_around" and avg_turn_dir >= 0 and rotation_y.value != "ramp_up":
+                    if (not timer.get_timer("right_marker") or not timer.get_timer("right_marker_up")) and not marker_direction == "turn_around" and avg_turn_dir >= 0 and rotation_y.value != "ramp_up":
                         turn_dir.value = "right"
                         line_crop.value = .45
-                    elif (not timer.get_timer("right_marker") or not timer.get_timer("right_marker_up")) and not turn_direction == "turn_around" and avg_turn_dir >= 0 and rotation_y.value == "ramp_up":
+                    elif (not timer.get_timer("right_marker") or not timer.get_timer("right_marker_up")) and not marker_direction == "turn_around" and avg_turn_dir >= 0 and rotation_y.value == "ramp_up":
                         turn_dir.value = "right"
                         line_crop.value = .75
-                    elif (not timer.get_timer("left_marker") or not timer.get_timer("left_marker_up")) and not turn_direction == "turn_around" and avg_turn_dir <= 0 and rotation_y.value != "ramp_up":
+                    elif (not timer.get_timer("left_marker") or not timer.get_timer("left_marker_up")) and not marker_direction == "turn_around" and avg_turn_dir <= 0 and rotation_y.value != "ramp_up":
                         turn_dir.value = "left"
                         line_crop.value = .45
-                    elif (not timer.get_timer("left_marker") or not timer.get_timer("left_marker_up")) and not turn_direction == "turn_around" and avg_turn_dir <= 0 and rotation_y.value == "ramp_up":
+                    elif (not timer.get_timer("left_marker") or not timer.get_timer("left_marker_up")) and not marker_direction == "turn_around" and avg_turn_dir <= 0 and rotation_y.value == "ramp_up":
                         turn_dir.value = "left"
                         line_crop.value = .75
                     else:
-                        turn_dir.value = turn_direction
+                        turn_dir.value = marker_direction
                         line_crop.value = .75 if rotation_y.value == "ramp_up" or not timer.get_timer("was_ramp_up") else .48
 
                     # Determine the correct line
