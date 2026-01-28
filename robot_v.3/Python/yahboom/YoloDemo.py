@@ -10,8 +10,12 @@ nmsThreshold = 0.2
 #### LOAD MODEL
 base_path = os.path.dirname(os.path.abspath(__file__))
 classesFile = os.path.join(base_path, "coco.names")
-modelConfiguration = os.path.join(base_path, "yolov3-tiny.cfg")
-modelWeights = os.path.join(base_path, "yolov3-tiny.weights")
+model_pairs = [
+    ("yolov3-tiny.cfg", "yolov3-tiny.weights"),
+    ("yolov3.cfg", "yolov3.weights"),
+]
+modelConfiguration = None
+modelWeights = None
 
 classNames = []
 if os.path.exists(classesFile):
@@ -21,7 +25,15 @@ else:
     print(f"File {classesFile} tidak dijumpai. Sila pastikan file ini wujud dalam folder yang sama dengan skrip.")
     exit(1)
 
-if not (os.path.exists(modelConfiguration) and os.path.exists(modelWeights)):
+for cfg_name, weights_name in model_pairs:
+    cfg_path = os.path.join(base_path, cfg_name)
+    weights_path = os.path.join(base_path, weights_name)
+    if os.path.exists(cfg_path) and os.path.exists(weights_path):
+        modelConfiguration = cfg_path
+        modelWeights = weights_path
+        break
+
+if not (modelConfiguration and modelWeights):
     print("Fail konfigurasi atau berat model tidak dijumpai. Sila pastikan kedua-dua fail ini wujud.")
     exit(1)
 
