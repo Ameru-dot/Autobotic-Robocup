@@ -107,7 +107,7 @@ def zone_cam_loop():
     camera = Picamera2(1)
     camera.start()
 
-    shm_cam2 = shared_memory.SharedMemory(name="shm_cam_2", create=True, size=506880)
+    shm_cam2 = shared_memory.SharedMemory(name="shm_zone", create=True, size=506880)
 
     calibration_saved = True
 
@@ -166,7 +166,7 @@ def zone_cam_loop():
                             height = y2 - y1
                             area = width * height
                             distance = (x1 + width // 2) - horizontal_center
-                            boxes.append([area, distance, name, width])
+                            boxes.append([area, distance, name, width, confidence])
 
                             color = colors(class_id, True)
                             cv2.rectangle(cv2_img, (x1, y1), (x2, y2), color, 2)
@@ -179,13 +179,25 @@ def zone_cam_loop():
 
                             last_best_box = best_box
                             ball_distance.value = best_box[1]
-                            ball_type.value = str.lower(str(best_box[2]))
+                            ball_type_raw = str.lower(str(best_box[2]))
+                            if "silver" in ball_type_raw:
+                                ball_type.value = "silver"
+                            elif "black" in ball_type_raw:
+                                ball_type.value = "black"
+                            else:
+                                ball_type.value = "none"
                             ball_width.value = best_box[3]
+                            ball_conf.value = best_box[4]
+                            ball_error_x.value = max(-1.0, min(1.0, best_box[1] / horizontal_center))
+                            ball_box_width.value = best_box[3]
                         else:
                             last_best_box = None
                             ball_distance.value = 0
                             ball_type.value = "none"
                             ball_width.value = -1
+                            ball_conf.value = 0.0
+                            ball_error_x.value = 0.0
+                            ball_box_width.value = 0.0
 
                     elif zone_status.value == "deposit_green":
                         contours_green = get_green_contours(cv2_img)
