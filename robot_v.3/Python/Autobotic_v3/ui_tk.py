@@ -34,10 +34,9 @@ from mp_manager import (
     light_on,
 )
 
-# Shared memory names and sizes (must match line_cam/zone_cam)
 LINE_SHM_NAME = "shm_line"
 ZONE_SHM_NAME = "shm_zone"
-LINE_SIZE = (448, 252)   # width, height
+LINE_SIZE = (448, 252)
 ZONE_SIZE = (640, 264)
 
 
@@ -52,91 +51,124 @@ def attach_shm(name, size):
 
 def ui_loop():
     root = tk.Tk()
-    root.title("Mine UI (tkinter)")
-    root.geometry("960x620")
+    root.title("Autobotic UI")
+    root.geometry("1100x700")
     root.resizable(False, False)
 
-    labels = {
-        "status": tk.StringVar(),
-        "objective": tk.StringVar(),
-        "line": tk.StringVar(),
-        "exit_ang": tk.StringVar(),
-        "silver": tk.StringVar(),
-        "imu": tk.StringVar(),
-        "ir": tk.StringVar(),
-        "ball": tk.StringVar(),
-        "turn_dir": tk.StringVar(),
-        "zone": tk.StringVar(),
-        "victim": tk.StringVar(),
-    }
+    style = ttk.Style(root)
+    try:
+        style.theme_use("clam")
+    except Exception:
+        pass
+    style.configure("Title.TLabel", font=("Segoe UI", 12, "bold"))
+    style.configure("Key.TLabel", font=("Segoe UI", 10, "bold"))
+    style.configure("Val.TLabel", font=("Segoe UI", 10))
 
-    ttk.Label(root, text="Status").grid(row=0, column=0, sticky="w", padx=6, pady=4)
-    ttk.Label(root, textvariable=labels["status"]).grid(row=0, column=1, sticky="w")
+    root.columnconfigure(0, weight=0)
+    root.columnconfigure(1, weight=1)
+    root.rowconfigure(0, weight=1)
 
-    ttk.Label(root, text="Objective").grid(row=1, column=0, sticky="w", padx=6, pady=4)
-    ttk.Label(root, textvariable=labels["objective"]).grid(row=1, column=1, sticky="w")
+    left = ttk.Frame(root, padding=10)
+    left.grid(row=0, column=0, sticky="ns")
 
-    ttk.Label(root, text="Line").grid(row=2, column=0, sticky="w", padx=6, pady=4)
-    ttk.Label(root, textvariable=labels["line"]).grid(row=2, column=1, sticky="w")
+    right = ttk.Frame(root, padding=10)
+    right.grid(row=0, column=1, sticky="nsew")
+    right.columnconfigure(0, weight=1)
 
-    ttk.Label(root, text="Turn").grid(row=3, column=0, sticky="w", padx=6, pady=4)
-    ttk.Label(root, textvariable=labels["turn_dir"]).grid(row=3, column=1, sticky="w")
+    labels = {k: tk.StringVar() for k in [
+        "status",
+        "objective",
+        "line",
+        "turn",
+        "exit",
+        "silver",
+        "imu",
+        "ir",
+        "ball",
+        "zone",
+        "victim",
+    ]}
 
-    ttk.Label(root, text="Exit Ang").grid(row=4, column=0, sticky="w", padx=6, pady=4)
-    ttk.Label(root, textvariable=labels["exit_ang"]).grid(row=4, column=1, sticky="w")
+    light_var = tk.StringVar(value="Light: OFF")
 
-    ttk.Label(root, text="Silver").grid(row=5, column=0, sticky="w", padx=6, pady=4)
-    ttk.Label(root, textvariable=labels["silver"]).grid(row=5, column=1, sticky="w")
+    def kv_row(frame, row, key, var):
+        ttk.Label(frame, text=key, style="Key.TLabel").grid(row=row, column=0, sticky="w", padx=4, pady=2)
+        ttk.Label(frame, textvariable=var, style="Val.TLabel").grid(row=row, column=1, sticky="w", padx=4, pady=2)
 
-    ttk.Label(root, text="IMU").grid(row=6, column=0, sticky="w", padx=6, pady=4)
-    ttk.Label(root, textvariable=labels["imu"]).grid(row=6, column=1, sticky="w")
+    system_frame = ttk.LabelFrame(left, text="System", padding=8)
+    system_frame.grid(row=0, column=0, sticky="ew")
+    kv_row(system_frame, 0, "Status", labels["status"])
+    kv_row(system_frame, 1, "Objective", labels["objective"])
 
-    ttk.Label(root, text="IR").grid(row=7, column=0, sticky="w", padx=6, pady=4)
-    ttk.Label(root, textvariable=labels["ir"]).grid(row=7, column=1, sticky="w")
+    light_label = tk.Label(system_frame, textvariable=light_var, fg="#fff", bg="#444", width=14)
+    light_label.grid(row=2, column=0, columnspan=2, sticky="w", padx=4, pady=4)
 
-    ttk.Label(root, text="Ball").grid(row=8, column=0, sticky="w", padx=6, pady=4)
-    ttk.Label(root, textvariable=labels["ball"]).grid(row=8, column=1, sticky="w")
+    line_frame = ttk.LabelFrame(left, text="Line", padding=8)
+    line_frame.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+    kv_row(line_frame, 0, "Line", labels["line"])
+    kv_row(line_frame, 1, "Turn", labels["turn"])
+    kv_row(line_frame, 2, "Exit Ang", labels["exit"])
+    kv_row(line_frame, 3, "Silver", labels["silver"])
 
-    ttk.Label(root, text="Zone").grid(row=9, column=0, sticky="w", padx=6, pady=4)
-    ttk.Label(root, textvariable=labels["zone"]).grid(row=9, column=1, sticky="w")
+    imu_frame = ttk.LabelFrame(left, text="IMU", padding=8)
+    imu_frame.grid(row=2, column=0, sticky="ew", pady=(8, 0))
+    kv_row(imu_frame, 0, "Yaw/Pitch/Roll", labels["imu"])
 
-    ttk.Label(root, text="Victims").grid(row=10, column=0, sticky="w", padx=6, pady=4)
-    ttk.Label(root, textvariable=labels["victim"]).grid(row=10, column=1, sticky="w")
+    ir_frame = ttk.LabelFrame(left, text="IR", padding=8)
+    ir_frame.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+    kv_row(ir_frame, 0, "Sensors", labels["ir"])
 
-    # Mode buttons
-    btn_frame = ttk.Frame(root)
-    btn_frame.grid(row=11, column=0, columnspan=2, pady=8)
-    ttk.Button(btn_frame, text="Mode: Line", command=lambda: objective.__setattr__("value", "follow_line")).pack(side="left", padx=4)
-    ttk.Button(btn_frame, text="Mode: Zone", command=lambda: objective.__setattr__("value", "zone")).pack(side="left", padx=4)
-    ttk.Button(btn_frame, text="Mode: Manual", command=lambda: objective.__setattr__("value", "manual")).pack(side="left", padx=4)
+    zone_frame = ttk.LabelFrame(left, text="Zone", padding=8)
+    zone_frame.grid(row=4, column=0, sticky="ew", pady=(8, 0))
+    kv_row(zone_frame, 0, "Ball", labels["ball"])
+    kv_row(zone_frame, 1, "Corners", labels["zone"])
 
-    # Calibration buttons
-    calib_frame = ttk.Frame(root)
-    calib_frame.grid(row=12, column=0, columnspan=2, pady=8)
-    ttk.Button(calib_frame, text="Calib Line Green", command=lambda: (calibration_color.__setattr__("value", "l-gl"), calibrate_color_status.__setattr__("value", "calibrate"))).pack(side="left", padx=4)
-    ttk.Button(calib_frame, text="Calib Line Black", command=lambda: (calibration_color.__setattr__("value", "l-bn"), calibrate_color_status.__setattr__("value", "calibrate"))).pack(side="left", padx=4)
-    ttk.Button(calib_frame, text="Calib Line Red", command=lambda: (calibration_color.__setattr__("value", "l-rl"), calibrate_color_status.__setattr__("value", "calibrate"))).pack(side="left", padx=4)
-    ttk.Button(calib_frame, text="Calib Zone Green", command=lambda: (calibration_color.__setattr__("value", "z-g"), calibrate_color_status.__setattr__("value", "calibrate"))).pack(side="left", padx=4)
-    ttk.Button(calib_frame, text="Calib Zone Red", command=lambda: (calibration_color.__setattr__("value", "z-r"), calibrate_color_status.__setattr__("value", "calibrate"))).pack(side="left", padx=4)
-    ttk.Button(calib_frame, text="Check", command=lambda: calibrate_color_status.__setattr__("value", "check")).pack(side="left", padx=4)
+    victim_frame = ttk.LabelFrame(left, text="Victims", padding=8)
+    victim_frame.grid(row=5, column=0, sticky="ew", pady=(8, 0))
+    kv_row(victim_frame, 0, "Counts", labels["victim"])
 
-    # Light toggle
+    mode_frame = ttk.LabelFrame(left, text="Modes", padding=8)
+    mode_frame.grid(row=6, column=0, sticky="ew", pady=(8, 0))
+    ttk.Button(mode_frame, text="Line", command=lambda: objective.__setattr__("value", "follow_line")).grid(row=0, column=0, padx=4, pady=2)
+    ttk.Button(mode_frame, text="Zone", command=lambda: objective.__setattr__("value", "zone")).grid(row=0, column=1, padx=4, pady=2)
+    ttk.Button(mode_frame, text="Manual", command=lambda: objective.__setattr__("value", "manual")).grid(row=0, column=2, padx=4, pady=2)
+
+    calib_frame = ttk.LabelFrame(left, text="Calibration", padding=8)
+    calib_frame.grid(row=7, column=0, sticky="ew", pady=(8, 0))
+    ttk.Button(calib_frame, text="Line Green", command=lambda: (calibration_color.__setattr__("value", "l-gl"), calibrate_color_status.__setattr__("value", "calibrate"))).grid(row=0, column=0, padx=3, pady=2)
+    ttk.Button(calib_frame, text="Line Black", command=lambda: (calibration_color.__setattr__("value", "l-bn"), calibrate_color_status.__setattr__("value", "calibrate"))).grid(row=0, column=1, padx=3, pady=2)
+    ttk.Button(calib_frame, text="Line Red", command=lambda: (calibration_color.__setattr__("value", "l-rl"), calibrate_color_status.__setattr__("value", "calibrate"))).grid(row=0, column=2, padx=3, pady=2)
+    ttk.Button(calib_frame, text="Zone Green", command=lambda: (calibration_color.__setattr__("value", "z-g"), calibrate_color_status.__setattr__("value", "calibrate"))).grid(row=1, column=0, padx=3, pady=2)
+    ttk.Button(calib_frame, text="Zone Red", command=lambda: (calibration_color.__setattr__("value", "z-r"), calibrate_color_status.__setattr__("value", "calibrate"))).grid(row=1, column=1, padx=3, pady=2)
+    ttk.Button(calib_frame, text="Check", command=lambda: calibrate_color_status.__setattr__("value", "check")).grid(row=1, column=2, padx=3, pady=2)
+
+    action_frame = ttk.LabelFrame(left, text="Actions", padding=8)
+    action_frame.grid(row=8, column=0, sticky="ew", pady=(8, 0))
+
     def toggle_light():
         light_on.value = not light_on.value
-    light_btn = ttk.Button(root, text="Toggle Light", command=toggle_light)
-    light_btn.grid(row=13, column=0, columnspan=2, pady=6)
 
-    # Camera placeholders
-    cam_frame = ttk.Frame(root, borderwidth=1, relief="groove")
-    cam_frame.grid(row=0, column=2, rowspan=17, padx=8, pady=8, sticky="nsew")
-    cam_frame.grid_columnconfigure(0, weight=1)
-    cam_frame.grid_rowconfigure(0, weight=1)
-    cam_frame.grid_rowconfigure(1, weight=1)
+    ttk.Button(action_frame, text="Toggle Light", command=toggle_light).grid(row=0, column=0, padx=4, pady=2)
 
-    cam1_label = tk.Label(cam_frame, text="Camera 1\n(Line)", bg="#222", fg="#ccc", width=48, height=12)
-    cam1_label.grid(row=0, column=0, padx=4, pady=4, sticky="nsew")
-    cam2_label = tk.Label(cam_frame, text="Camera 2\n(Zone)", bg="#333", fg="#ccc", width=48, height=12)
-    cam2_label.grid(row=1, column=0, padx=4, pady=4, sticky="nsew")
+    def on_quit():
+        terminate.value = True
+        try:
+            root.destroy()
+        except Exception:
+            pass
+
+    ttk.Button(action_frame, text="Quit", command=on_quit).grid(row=0, column=1, padx=4, pady=2)
+
+    cam_frame = ttk.LabelFrame(right, text="Cameras", padding=6)
+    cam_frame.grid(row=0, column=0, sticky="nsew")
+    cam_frame.columnconfigure(0, weight=1)
+    cam_frame.rowconfigure(0, weight=1)
+    cam_frame.rowconfigure(1, weight=1)
+
+    cam1_label = tk.Label(cam_frame, text="Line Camera", bg="#222", fg="#ccc", width=64, height=18)
+    cam1_label.grid(row=0, column=0, padx=6, pady=6, sticky="nsew")
+    cam2_label = tk.Label(cam_frame, text="Zone Camera", bg="#333", fg="#ccc", width=64, height=18)
+    cam2_label.grid(row=1, column=0, padx=6, pady=6, sticky="nsew")
 
     cam1_img = None
     cam2_img = None
@@ -147,17 +179,14 @@ def ui_loop():
     def refresh():
         nonlocal cam1_img, cam2_img, shm_line, arr_line, shm_zone, arr_zone
         if terminate.value:
-            try:
-                root.destroy()
-            except Exception:
-                pass
+            on_quit()
             return
 
         labels["status"].set(status.value)
         labels["objective"].set(objective.value)
         labels["line"].set(f"{'found' if line_found.value else 'lost'} err={line_error_x.value:.2f}")
-        labels["turn_dir"].set(turn_direction.value)
-        labels["exit_ang"].set(f"{exit_angle.value:.1f}")
+        labels["turn"].set(turn_direction.value)
+        labels["exit"].set(f"{exit_angle.value:.1f}")
         labels["silver"].set(f"{silver_prob.value:.3f}")
         labels["imu"].set(f"yaw={imu_yaw.value:.1f} pitch={imu_pitch.value:.1f} roll={imu_roll.value:.1f}")
         labels["ir"].set(f"IR1={ir1.value} IR2={ir2.value} IRB={ir_back.value}")
@@ -165,13 +194,15 @@ def ui_loop():
         labels["zone"].set(f"G:{zone_green_found.value} err={zone_green_error_x.value:.2f} | R:{zone_red_found.value} err={zone_red_error_x.value:.2f}")
         labels["victim"].set(f"Alive:{alive_count.value} Dead:{dead_count.value}")
 
-        # Try to refresh camera frames
+        light_var.set("Light: ON" if light_on.value else "Light: OFF")
+        light_label.configure(bg="#1b5e20" if light_on.value else "#444")
+
         try:
             if arr_line is None:
                 shm_line, arr_line = attach_shm(LINE_SHM_NAME, LINE_SIZE)
             if arr_line is not None:
                 img = Image.fromarray(arr_line.copy())
-                img = img.resize((480, 270))
+                img = img.resize((520, 292))
                 cam1_img = ImageTk.PhotoImage(img)
                 cam1_label.configure(image=cam1_img, text="")
         except Exception:
@@ -182,7 +213,7 @@ def ui_loop():
                 shm_zone, arr_zone = attach_shm(ZONE_SHM_NAME, ZONE_SIZE)
             if arr_zone is not None:
                 img = Image.fromarray(arr_zone.copy())
-                img = img.resize((480, 270))
+                img = img.resize((520, 292))
                 cam2_img = ImageTk.PhotoImage(img)
                 cam2_label.configure(image=cam2_img, text="")
         except Exception:
@@ -190,25 +221,16 @@ def ui_loop():
 
         root.after(200, refresh)
 
-    def on_quit():
-        terminate.value = True
-        try:
-            root.destroy()
-        except Exception:
-            pass
-        if shm_line:
-            try:
-                shm_line.close()
-            except Exception:
-                pass
-        if shm_zone:
-            try:
-                shm_zone.close()
-            except Exception:
-                pass
-
-    quit_btn = ttk.Button(root, text="Quit", command=on_quit)
-    quit_btn.grid(row=15, column=0, columnspan=2, pady=12)
-
     refresh()
     root.mainloop()
+
+    if shm_line:
+        try:
+            shm_line.close()
+        except Exception:
+            pass
+    if shm_zone:
+        try:
+            shm_zone.close()
+        except Exception:
+            pass
