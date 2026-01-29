@@ -2,7 +2,9 @@ import os
 from multiprocessing import shared_memory
 
 import cv2
+from libcamera import controls
 from numba import njit
+from picamera2 import Picamera2
 from skimage.metrics import structural_similarity
 from ultralytics import YOLO
 
@@ -11,11 +13,14 @@ from mp_manager import *
 
 debug_mode = False
 
+# Disable libcamera and Picamera2 logging
+Picamera2.set_logging(Picamera2.ERROR)
+os.environ["LIBCAMERA_LOG_LEVELS"] = "4"
 
 camera_x = 448
 camera_y = 252
 
-CAMERA_PATH_DOWN = os.environ.get("LINE_CAM_DEVICE", "/dev/video0")
+LINE_CAM_INDEX = int(os.environ.get("LINE_CAM_INDEX", "0"))
 
 calibration_square_size = 25
 
@@ -110,44 +115,29 @@ def check_contour_size(contours, contour_color="red", size=15000):
 
 
 def check_green(contours_grn, black_image):
-    line_center_x = camera_x / 2
-    moments = cv2.moments(black_image)
-    if moments["m00"] != 0:
-        line_center_x = int(moments["m10"] / moments["m00"])
+    black_around_sign = np.zeros((len(contours_grn), 5), dtype=np.int16)  # [[b,t,l,r,lp], [b,t,l,r,lp]]
 
-    left_count = 0
-    right_count = 0
-    tolerance = 20
-    ignore_y = camera_y * 0.9
-
-    for contour in contours_grn:
+    for i, contour in enumerate(contours_grn):
         area = cv2.contourArea(contour)
-        if area <= 1500:
+        if area <= 2500:
             continue
 
-        x, y, w, h = cv2.boundingRect(contour)
-        if (y + h) > ignore_y:
-            continue
+        green_box = cv2.boxPoints(cv2.minAreaRect(contour))
+        draw_box = np.intp(green_box)
+        cv2.drawContours(cv2_img, [draw_box], -1, (0, 0, 255), 2)
 
-        cx = x + w // 2
-        if cx < line_center_x - tolerance:
-            left_count += 1
-            color = (0, 255, 0)
-        elif cx > line_center_x + tolerance:
-            right_count += 1
-            color = (0, 0, 255)
-        else:
-            color = (255, 0, 0)
+        black_around_sign = check_black(black_around_sign, i, green_box, black_image.copy())
 
-        cv2.rectangle(cv2_img, (x, y), (x + w, y + h), color, 2)
+    turn_left, turn_right, left_bottom, right_bottom = determine_turn_direction(black_around_sign)
 
-    if left_count > 0 and right_count > 0:
-        return "turn_around"
-    if left_count > 0:
+    if turn_left and not turn_right and not left_bottom:
         return "left"
-    if right_count > 0:
+    elif turn_right and not turn_left and not right_bottom:
         return "right"
-    return "straight"
+    elif turn_left and turn_right and not (left_bottom and right_bottom):
+        return "turn_around"
+    else:
+        return "straight"
 
 
 @njit(cache=True)
@@ -485,7 +475,7 @@ def get_exit_angle(box):
     return left_points[-1], right_points[-1], angle
 
 
-def average_direction(marker_direction):
+def average_direction(turn_direction):
     turn_dir_num = 0
 
     if turn_direction == "left":
@@ -552,19 +542,17 @@ def line_cam_loop():
     time_last_bottom_point_x = empty_time_arr()
     time_last_average_line_point = empty_time_arr()
 
-    camera = cv2.VideoCapture(CAMERA_PATH_DOWN)
-    if not camera.isOpened():
-        camera = cv2.VideoCapture(0)
-    if not camera.isOpened():
-        raise RuntimeError(f"Failed to open line camera at {CAMERA_PATH_DOWN}")
+    camera = Picamera2(LINE_CAM_INDEX)
 
-    # Force MJPEG to avoid broken frames on some RDK setups
-    camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
-    camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 320)
+    mode = camera.sensor_modes[0]
+    camera.configure(camera.create_video_configuration(sensor={'output_size': mode['size'], 'bit_depth': mode['bit_depth']}))
+
+    camera.start()
+    camera.set_controls({"AfMode": controls.AfModeEnum.Manual, "LensPosition": 6.5, "FrameDurationLimits": (1000000 // 50, 1000000 // 50)})  # {"AfMode": controls.AfModeEnum.Manual, "LensPosition": 0.4} {"AfMode": controls.AfModeEnum.Continuous, "AfSpeed": controls.AfSpeedEnum.Fast}
+    time.sleep(0.1)
 
     if not debug_mode:
-        shm_cam1 = shared_memory.SharedMemory(name="shm_line", create=True, size=338688)
+        shm_cam1 = shared_memory.SharedMemory(name="shm_cam_1", create=True, size=338688)
 
     calibration_saved = True
     update_color_values()
@@ -598,12 +586,9 @@ def line_cam_loop():
     check_similarity_limit = 30
 
     while not terminate.value:
-        ret, frame = camera.read()
-        if not ret:
-            time.sleep(0.01)
-            continue
-        raw_capture = cv2.resize(frame, (camera_x, camera_y))
-        cv2_img = raw_capture.copy()
+        raw_capture = camera.capture_array()
+        raw_capture = cv2.resize(raw_capture, (camera_x, camera_y))
+        cv2_img = cv2.cvtColor(raw_capture, cv2.COLOR_RGBA2BGR)
 
         frame_limit = max_frames_zone if objective.value == "zone" and (zone_status.value == "begin" or zone_status.value == "find_balls" or zone_status.value == "pickup_ball") else max_frames_line
         if objective.value == "follow_line" and not rotation_y.value in ["ramp_down", "ramp_up"]:
@@ -742,11 +727,11 @@ def line_cam_loop():
 
                     # Check for green turn signs
                     if len(contours_grn) > 0:
-                        marker_direction = check_green(contours_grn, black_image)
+                        turn_direction = check_green(contours_grn, black_image)
                     else:
-                        marker_direction = "straight"
+                        turn_direction = "straight"
 
-                    time_turn_direction = add_time_value(time_turn_direction, average_direction(marker_direction))
+                    time_turn_direction = add_time_value(time_turn_direction, average_direction(turn_direction))
                     avg_turn_dir = get_time_average(time_turn_direction, .2)
 
                     if avg_turn_dir > .1 and not rotation_y.value == "ramp_up":
@@ -758,20 +743,20 @@ def line_cam_loop():
                     elif avg_turn_dir < -.1 and rotation_y.value == "ramp_up":
                         timer.set_timer("left_marker_up", .8)
 
-                    if (not timer.get_timer("right_marker") or not timer.get_timer("right_marker_up")) and not marker_direction == "turn_around" and avg_turn_dir >= 0 and rotation_y.value != "ramp_up":
+                    if (not timer.get_timer("right_marker") or not timer.get_timer("right_marker_up")) and not turn_direction == "turn_around" and avg_turn_dir >= 0 and rotation_y.value != "ramp_up":
                         turn_dir.value = "right"
                         line_crop.value = .45
-                    elif (not timer.get_timer("right_marker") or not timer.get_timer("right_marker_up")) and not marker_direction == "turn_around" and avg_turn_dir >= 0 and rotation_y.value == "ramp_up":
+                    elif (not timer.get_timer("right_marker") or not timer.get_timer("right_marker_up")) and not turn_direction == "turn_around" and avg_turn_dir >= 0 and rotation_y.value == "ramp_up":
                         turn_dir.value = "right"
                         line_crop.value = .75
-                    elif (not timer.get_timer("left_marker") or not timer.get_timer("left_marker_up")) and not marker_direction == "turn_around" and avg_turn_dir <= 0 and rotation_y.value != "ramp_up":
+                    elif (not timer.get_timer("left_marker") or not timer.get_timer("left_marker_up")) and not turn_direction == "turn_around" and avg_turn_dir <= 0 and rotation_y.value != "ramp_up":
                         turn_dir.value = "left"
                         line_crop.value = .45
-                    elif (not timer.get_timer("left_marker") or not timer.get_timer("left_marker_up")) and not marker_direction == "turn_around" and avg_turn_dir <= 0 and rotation_y.value == "ramp_up":
+                    elif (not timer.get_timer("left_marker") or not timer.get_timer("left_marker_up")) and not turn_direction == "turn_around" and avg_turn_dir <= 0 and rotation_y.value == "ramp_up":
                         turn_dir.value = "left"
                         line_crop.value = .75
                     else:
-                        turn_dir.value = marker_direction
+                        turn_dir.value = turn_direction
                         line_crop.value = .75 if rotation_y.value == "ramp_up" or not timer.get_timer("was_ramp_up") else .48
 
                     # Determine the correct line
@@ -1107,15 +1092,6 @@ def line_cam_loop():
 
             cv2.putText(cv2_img, str(fps), (int(camera_x * 0.92), int(camera_y * 0.05)), cv2.FONT_HERSHEY_DUPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
 
-            line_found.value = line_detected.value
-            if line_detected.value:
-                line_error_x.value = max(-1.0, min(1.0, line_angle.value / 180.0))
-            else:
-                line_error_x.value = 0.0
-            turn_direction.value = turn_dir.value
-            silver_prob.value = max(0.0, min(1.0, silver_value.value))
-            red_line_detected.value = red_detected.value
-
             # Checking the shared memory buffer size of the image
             # print(cv2_img.size)
 
@@ -1126,8 +1102,6 @@ def line_cam_loop():
             else:
                 buf = np.ndarray(cv2_img.shape, dtype=cv2_img.dtype, buffer=shm_cam1.buf)
                 buf[:] = cv2_img[:]
-
-    camera.release()
 
     if not debug_mode:
         shm_cam1.close()

@@ -2,6 +2,7 @@ import os
 from multiprocessing import shared_memory
 
 import cv2
+from picamera2 import Picamera2
 from skimage.metrics import structural_similarity
 from ultralytics import YOLO
 from ultralytics.utils.plotting import colors
@@ -12,7 +13,7 @@ from mp_manager import *
 camera_width = 640
 camera_height = 480
 
-CAMERA_PATH_FRONT = os.environ.get("ZONE_CAM_DEVICE", "/dev/video2")
+ZONE_CAM_INDEX = int(os.environ.get("ZONE_CAM_INDEX", "1"))
 
 calibration_square_size = 25
 horizontal_center = camera_width // 2
@@ -103,13 +104,8 @@ def zone_cam_loop():
     crop_percentage = 0.45
     crop_height = int(camera_height * crop_percentage)
 
-    camera = cv2.VideoCapture(CAMERA_PATH_FRONT)
-    if not camera.isOpened():
-        camera = cv2.VideoCapture(1)
-    if not camera.isOpened():
-        raise RuntimeError(f"Failed to open zone camera at {CAMERA_PATH_FRONT}")
-    camera.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
-    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_height)
+    camera = Picamera2(ZONE_CAM_INDEX)
+    camera.start()
 
     shm_cam2 = shared_memory.SharedMemory(name="shm_zone", create=True, size=506880)
 
@@ -132,13 +128,9 @@ def zone_cam_loop():
 
     update_color_values()
     while not terminate.value:
-        ret, frame = camera.read()
-        if not ret:
-            time.sleep(0.01)
-            continue
-        raw_capture = frame
+        raw_capture = camera.capture_array()
         raw_capture = raw_capture[crop_height:, :]
-        cv2_img = raw_capture.copy()
+        cv2_img = cv2.cvtColor(raw_capture, cv2.COLOR_RGBA2BGR)
 
         if capture_image.value:
             save_image(cv2_img)
@@ -280,7 +272,7 @@ def zone_cam_loop():
             buf = np.ndarray(cv2_img.shape, dtype=cv2_img.dtype, buffer=shm_cam2.buf)
             buf[:] = cv2_img[:]
 
-    camera.release()
+    camera.stop()
 
     shm_cam2.close()
     shm_cam2.unlink()

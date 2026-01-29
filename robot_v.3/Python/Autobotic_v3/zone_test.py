@@ -1,24 +1,19 @@
-﻿import os
+import os
 import time
 
 import cv2
+from picamera2 import Picamera2
 
 
 def main():
-    device = os.environ.get("ZONE_CAM_DEVICE", "/dev/video2")
-    cap = cv2.VideoCapture(device)
-    if not cap.isOpened():
-        cap = cv2.VideoCapture(1)
-    if not cap.isOpened():
-        raise RuntimeError(f"Failed to open zone camera at {device}")
+    cam_index = int(os.environ.get("ZONE_CAM_INDEX", "1"))
+    camera = Picamera2(cam_index)
+    camera.start()
 
     width = 640
     height = 480
     crop_percentage = 0.45
     crop_height = int(height * crop_percentage)
-
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
 
     fps_time = time.perf_counter()
     counter = 0
@@ -26,13 +21,10 @@ def main():
 
     try:
         while True:
-            ret, frame = cap.read()
-            if not ret:
-                time.sleep(0.01)
-                continue
-
+            frame = camera.capture_array()
             frame = cv2.resize(frame, (width, height))
             cropped = frame[crop_height:, :]
+            cropped = cv2.cvtColor(cropped, cv2.COLOR_RGBA2BGR)
 
             counter += 1
             if time.perf_counter() - fps_time > 1:
@@ -56,7 +48,7 @@ def main():
             if key == ord("q"):
                 break
     finally:
-        cap.release()
+        camera.stop()
         cv2.destroyAllWindows()
 
 

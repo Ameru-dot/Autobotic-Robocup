@@ -1,21 +1,26 @@
-﻿import os
+import os
 import time
 
 import cv2
+from libcamera import controls
+from picamera2 import Picamera2
 
 
 def main():
-    device = os.environ.get("LINE_CAM_DEVICE", "/dev/video0")
-    cap = cv2.VideoCapture(device)
-    if not cap.isOpened():
-        cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        raise RuntimeError(f"Failed to open line camera at {device}")
+    cam_index = int(os.environ.get("LINE_CAM_INDEX", "0"))
+    camera = Picamera2(cam_index)
+
+    mode = camera.sensor_modes[0]
+    camera.configure(camera.create_video_configuration(sensor={"output_size": mode["size"], "bit_depth": mode["bit_depth"]}))
+    camera.start()
+    try:
+        camera.set_controls({"AfMode": controls.AfModeEnum.Manual, "LensPosition": 6.5})
+    except Exception:
+        pass
+    time.sleep(0.1)
 
     width = 448
     height = 252
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
 
     fps_time = time.perf_counter()
     counter = 0
@@ -23,12 +28,9 @@ def main():
 
     try:
         while True:
-            ret, frame = cap.read()
-            if not ret:
-                time.sleep(0.01)
-                continue
-
+            frame = camera.capture_array()
             frame = cv2.resize(frame, (width, height))
+            frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
 
             counter += 1
             if time.perf_counter() - fps_time > 1:
@@ -52,7 +54,7 @@ def main():
             if key == ord("q"):
                 break
     finally:
-        cap.release()
+        camera.stop()
         cv2.destroyAllWindows()
 
 
