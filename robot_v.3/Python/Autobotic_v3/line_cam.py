@@ -560,8 +560,8 @@ def line_cam_loop():
 
     # Force MJPEG to avoid broken frames on some RDK setups
     camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
-    camera.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+    camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 320)
 
     if not debug_mode:
         shm_cam1 = shared_memory.SharedMemory(name="shm_line", create=True, size=338688)
