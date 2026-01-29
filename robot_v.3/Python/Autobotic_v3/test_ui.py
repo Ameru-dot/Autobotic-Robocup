@@ -192,9 +192,9 @@ def build_ui(state: DummyState):
     cam_frame.rowconfigure(0, weight=1)
     cam_frame.rowconfigure(1, weight=1)
 
-    cam1_label = tk.Label(cam_frame, text="Line Camera", bg="#222", fg="#ccc", width=64, height=18)
+    cam1_label = tk.Label(cam_frame, text="Line Camera", bg="#222", fg="#ccc")
     cam1_label.grid(row=0, column=0, padx=6, pady=6, sticky="nsew")
-    cam2_label = tk.Label(cam_frame, text="Zone Camera", bg="#333", fg="#ccc", width=64, height=18)
+    cam2_label = tk.Label(cam_frame, text="Zone Camera", bg="#333", fg="#ccc")
     cam2_label.grid(row=1, column=0, padx=6, pady=6, sticky="nsew")
 
     cam1_img = None
