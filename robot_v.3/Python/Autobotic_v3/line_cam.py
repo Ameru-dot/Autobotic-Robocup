@@ -563,6 +563,12 @@ def line_cam_loop():
     camera.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
     camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
 
+    # Try to stabilize exposure/white balance (may be ignored by some webcams)
+    camera.set(cv2.CAP_PROP_AUTO_WB, 0)
+    camera.set(cv2.CAP_PROP_WB_TEMPERATURE, 4500)
+    camera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)  # manual (platform dependent)
+    camera.set(cv2.CAP_PROP_EXPOSURE, -6)
+
     camera.set(cv2.CAP_PROP_FRAME_WIDTH, camera_x)
     camera.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_y)
 
