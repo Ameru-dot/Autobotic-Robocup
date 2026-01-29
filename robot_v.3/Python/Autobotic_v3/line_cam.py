@@ -563,9 +563,6 @@ def line_cam_loop():
     camera.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
     camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
 
-    camera.set(cv2.CAP_PROP_FRAME_WIDTH, camera_x)
-    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_y)
-
     if not debug_mode:
         shm_cam1 = shared_memory.SharedMemory(name="shm_line", create=True, size=338688)
 
