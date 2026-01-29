@@ -19,8 +19,21 @@ from ui_tk import ui_loop
 from mp_manager import terminate, objective
 
 
+import threading
+
+
+def enforce_line_mode():
+    while not terminate.value:
+        objective.value = "follow_line"
+        time.sleep(0.2)
+
+
 def main():
     objective.value = "follow_line"
+
+    # Keep objective locked to follow_line
+    enforcer = threading.Thread(target=enforce_line_mode, daemon=True)
+    enforcer.start()
 
     procs = [
         Process(target=line_cam_loop, name="line_cam"),
