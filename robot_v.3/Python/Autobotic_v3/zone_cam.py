@@ -104,10 +104,10 @@ def zone_cam_loop():
     crop_percentage = 0.45
     crop_height = int(camera_height * crop_percentage)
 
-    camera = Picamera2(ZONE_CAM_INDEX)
+    camera = Picamera2(1)
     camera.start()
 
-    shm_cam2 = shared_memory.SharedMemory(name="shm_zone", create=True, size=506880)
+    shm_cam2 = shared_memory.SharedMemory(name="shm_cam_2", create=True, size=506880)
 
     calibration_saved = True
 
@@ -166,7 +166,7 @@ def zone_cam_loop():
                             height = y2 - y1
                             area = width * height
                             distance = (x1 + width // 2) - horizontal_center
-                            boxes.append([area, distance, name, width, confidence])
+                            boxes.append([area, distance, name, width])
 
                             color = colors(class_id, True)
                             cv2.rectangle(cv2_img, (x1, y1), (x2, y2), color, 2)
@@ -179,41 +179,21 @@ def zone_cam_loop():
 
                             last_best_box = best_box
                             ball_distance.value = best_box[1]
-                            ball_type_raw = str.lower(str(best_box[2]))
-                            if "silver" in ball_type_raw:
-                                ball_type.value = "silver"
-                            elif "black" in ball_type_raw:
-                                ball_type.value = "black"
-                            else:
-                                ball_type.value = "none"
+                            ball_type.value = str.lower(str(best_box[2]))
                             ball_width.value = best_box[3]
-                            ball_conf.value = best_box[4]
-                            ball_error_x.value = max(-1.0, min(1.0, best_box[1] / horizontal_center))
-                            ball_box_width.value = best_box[3]
                         else:
                             last_best_box = None
                             ball_distance.value = 0
                             ball_type.value = "none"
                             ball_width.value = -1
-                            ball_conf.value = 0.0
-                            ball_error_x.value = 0.0
-                            ball_box_width.value = 0.0
 
                     elif zone_status.value == "deposit_green":
                         contours_green = get_green_contours(cv2_img)
                         corner_distance.value, corner_size.value = check_contours(contours_green, cv2_img, (0, 0, 255))
-                        zone_green_found.value = corner_size.value > 0 and corner_distance.value != -181
-                        zone_green_error_x.value = max(-1.0, min(1.0, corner_distance.value / 180.0))
-                        zone_red_found.value = False
-                        zone_red_error_x.value = 0.0
 
                     elif zone_status.value == "deposit_red":
                         contours_red = get_red_contours(cv2_img)
                         corner_distance.value, corner_size.value = check_contours(contours_red, cv2_img, (0, 255, 0))
-                        zone_red_found.value = corner_size.value > 0 and corner_distance.value != -181
-                        zone_red_error_x.value = max(-1.0, min(1.0, corner_distance.value / 180.0))
-                        zone_green_found.value = False
-                        zone_green_error_x.value = 0.0
 
 
             elif calibrate_color_status.value == "calibrate" and (calibration_color.value == "z-r" or calibration_color.value == "z-g"):
@@ -271,8 +251,6 @@ def zone_cam_loop():
 
             buf = np.ndarray(cv2_img.shape, dtype=cv2_img.dtype, buffer=shm_cam2.buf)
             buf[:] = cv2_img[:]
-
-    camera.stop()
 
     shm_cam2.close()
     shm_cam2.unlink()
