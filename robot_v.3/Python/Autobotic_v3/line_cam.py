@@ -557,6 +557,12 @@ def line_cam_loop():
         camera = cv2.VideoCapture(0)
     if not camera.isOpened():
         raise RuntimeError(f"Failed to open line camera at {CAMERA_PATH_DOWN}")
+
+    # Force MJPEG to avoid broken frames on some RDK setups
+    camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+    camera.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+
     camera.set(cv2.CAP_PROP_FRAME_WIDTH, camera_x)
     camera.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_y)
 
