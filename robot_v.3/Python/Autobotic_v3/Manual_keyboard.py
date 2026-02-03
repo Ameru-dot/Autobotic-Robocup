@@ -1,18 +1,24 @@
 import pygame
 import time
-from motor_driver import MotorDriver
+import serial
 
-# Initialize motor driver
-md = MotorDriver(port="/dev/ttyUSB0", motor_type=1, upload_data=1)
-SPEED = 300
-SPEED1 = 600
+PORT = "/dev/ttyACM0"
+BAUD = 115200
+SPEED = 150
+SPEED1 = 200
 
 
-# Initialize pygame
+def send(ser, m1, m2, m3, m4):
+    cmd = f"M,{m1},{m2},{m3},{m4}
+"
+    ser.write(cmd.encode())
+
+
 pygame.init()
 screen = pygame.display.set_mode((400, 200))
 pygame.display.set_caption("Motor Control - WASD or Arrows")
 font = pygame.font.Font(None, 36)
+
 
 def draw_message(message):
     screen.fill((0, 0, 0))
@@ -20,44 +26,51 @@ def draw_message(message):
     screen.blit(text, (20, 80))
     pygame.display.flip()
 
-def move_forward(): 
+
+def move_forward(ser):
     draw_message("Forward")
-    md.control_speed(SPEED, SPEED, SPEED, SPEED)
+    send(ser, SPEED, SPEED, SPEED, SPEED)
 
-def move_backward(): 
+
+def move_backward(ser):
     draw_message("Backward")
-    md.control_speed(-SPEED, -SPEED, -SPEED, -SPEED)
+    send(ser, -SPEED, -SPEED, -SPEED, -SPEED)
 
-def turn_left(): 
+
+def turn_left(ser):
     draw_message("Left")
-    md.control_speed(-SPEED1, SPEED1, -SPEED, SPEED)
+    send(ser, -SPEED1, SPEED1, -SPEED, SPEED)
 
-def turn_right(): 
+
+def turn_right(ser):
     draw_message("Right")
-    md.control_speed(SPEED, -SPEED, SPEED, -SPEED)
+    send(ser, SPEED, -SPEED, SPEED, -SPEED)
 
-def stop():
+
+def stop(ser):
     draw_message("Stopped")
-    md.control_speed(0, 0, 0, 0)
+    send(ser, 0, 0, 0, 0)
 
-# Start
-draw_message("Ready - Use Arrow Keys or WASD")
 
 try:
+    ser = serial.Serial(PORT, BAUD, timeout=0.5)
+    time.sleep(1)
+    draw_message("Ready - Use Arrow Keys or WASD")
+
     running = True
     while running:
         keys = pygame.key.get_pressed()
 
         if keys[pygame.K_w] or keys[pygame.K_UP]:
-            move_forward()
+            move_forward(ser)
         elif keys[pygame.K_s] or keys[pygame.K_DOWN]:
-            move_backward()
+            move_backward(ser)
         elif keys[pygame.K_a] or keys[pygame.K_LEFT]:
-            turn_left()
+            turn_left(ser)
         elif keys[pygame.K_d] or keys[pygame.K_RIGHT]:
-            turn_right()
+            turn_right(ser)
         else:
-            stop()
+            stop(ser)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -71,9 +84,13 @@ except KeyboardInterrupt:
     pass
 
 finally:
-    stop()
-    md.close()
+    try:
+        stop(ser)
+    except Exception:
+        pass
+    try:
+        ser.close()
+    except Exception:
+        pass
     pygame.quit()
     print("Exited cleanly.")
-
-

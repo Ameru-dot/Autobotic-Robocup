@@ -1,52 +1,47 @@
 import time
+import serial
 
-from motor import MotorDriver
 from mp_manager import motor_fl, motor_fr, motor_bl, motor_br, terminate
 
-MOTOR_PORT = "/dev/ttyUSB0"
-MOTOR_BAUD = 115200
-MOTOR_TYPE = 2
-UPLOAD_DATA = 1
-MOTOR_PERIOD = 0.03
+# Arduino serial (L298N control)
+ARDUINO_PORT = "/dev/ttyACM0"
+ARDUINO_BAUD = 115200
+SEND_PERIOD = 0.03
 
 CONTROL_MAX = 255
-SPEED_MAX = 1000
 
-# Map logical wheels to Yahboom M1..M4 order.
-# User mapping: M1 left, M2 left, M3 right, M4 right.
-# Default assumption: M1=fl, M2=bl, M3=fr, M4=br.
+# Logical wheel order to Arduino M1..M4
+# M1=front left, M2=back left, M3=front right, M4=back right
 MOTOR_ORDER = ("fl", "bl", "fr", "br")
 MOTOR_INVERT = {"fl": False, "fr": False, "bl": False, "br": False}
 
 
-def scale_speed(value: int) -> int:
-    scaled = int(value * SPEED_MAX / CONTROL_MAX)
-    return max(-SPEED_MAX, min(SPEED_MAX, scaled))
+def clamp_speed(value: int) -> int:
+    return max(-CONTROL_MAX, min(CONTROL_MAX, int(value)))
 
 
-def connect_driver() -> MotorDriver:
-    return MotorDriver(
-        port=MOTOR_PORT,
-        baudrate=MOTOR_BAUD,
-        motor_type=MOTOR_TYPE,
-        upload_data=UPLOAD_DATA,
-    )
+def connect_serial():
+    try:
+        return serial.Serial(ARDUINO_PORT, ARDUINO_BAUD, timeout=0.5)
+    except serial.SerialException:
+        return None
 
 
 def motor_loop():
-    md = connect_driver()
+    ser = connect_serial()
     last_sent = (0, 0, 0, 0)
     last_send_time = 0.0
+
     while not terminate.value:
-        if md.ser is None:
+        if ser is None or not ser.is_open:
             time.sleep(1.0)
-            md = connect_driver()
+            ser = connect_serial()
             continue
 
         now = time.time()
         desired = (motor_fl.value, motor_fr.value, motor_bl.value, motor_br.value)
         changed = desired != last_sent
-        stale = (now - last_send_time) > MOTOR_PERIOD
+        stale = (now - last_send_time) > SEND_PERIOD
 
         if changed or stale:
             values = {"fl": desired[0], "fr": desired[1], "bl": desired[2], "br": desired[3]}
@@ -55,16 +50,28 @@ def motor_loop():
                 val = values[key]
                 if MOTOR_INVERT.get(key, False):
                     val = -val
-                ordered.append(val)
-            scaled = tuple(scale_speed(v) for v in ordered)
-            md.control_speed(*scaled)
+                ordered.append(clamp_speed(val))
+
+            cmd = f"M,{ordered[0]},{ordered[1]},{ordered[2]},{ordered[3]}
+"
+            try:
+                ser.write(cmd.encode())
+            except serial.SerialException:
+                try:
+                    ser.close()
+                except Exception:
+                    pass
+                ser = None
+
             last_sent = desired
             last_send_time = now
 
         time.sleep(0.005)
 
     try:
-        md.control_speed(0, 0, 0, 0)
+        if ser and ser.is_open:
+            ser.write(b"M,0,0,0,0
+")
+            ser.close()
     except Exception:
         pass
-    md.cleanup()

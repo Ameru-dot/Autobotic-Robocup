@@ -38,6 +38,23 @@ const uint8_t SERVO_S1 = 27;  // Main Barrier
 const uint8_t SERVO_S2 = 28;  // Dead Barrier
 const uint8_t SERVO_C1 = 29;  // Camera
 
+// L298N motor driver pins (2x boards)
+// Board #1 (Left): M1=OUT1/2, M2=OUT3/4
+const uint8_t L1_ENA = 5;   // PWM
+const uint8_t L1_IN1 = 30;
+const uint8_t L1_IN2 = 31;
+const uint8_t L1_ENB = 6;   // PWM
+const uint8_t L1_IN3 = 32;
+const uint8_t L1_IN4 = 33;
+
+// Board #2 (Right): M3=OUT1/2, M4=OUT3/4
+const uint8_t L2_ENA = 7;   // PWM
+const uint8_t L2_IN1 = 34;
+const uint8_t L2_IN2 = 35;
+const uint8_t L2_ENB = 8;   // PWM
+const uint8_t L2_IN3 = 36;
+const uint8_t L2_IN4 = 37;
+
 // Telemetry period (ms)
 const uint16_t TELEMETRY_MS = 50;  // 20 Hz
 
@@ -59,6 +76,30 @@ const size_t BUF_SIZE = 96;
 char rxBuf[BUF_SIZE];
 size_t rxLen = 0;
 
+// L298N motor helpers
+void setMotor(uint8_t en, uint8_t in1, uint8_t in2, int speed) {
+  int pwm = abs(speed);
+  if (pwm > 255) pwm = 255;
+  if (speed > 0) {
+    digitalWrite(in1, HIGH);
+    digitalWrite(in2, LOW);
+  } else if (speed < 0) {
+    digitalWrite(in1, LOW);
+    digitalWrite(in2, HIGH);
+  } else {
+    digitalWrite(in1, LOW);
+    digitalWrite(in2, LOW);
+  }
+  analogWrite(en, pwm);
+}
+
+void setAllMotors(int m1, int m2, int m3, int m4) {
+  setMotor(L1_ENA, L1_IN1, L1_IN2, m1);
+  setMotor(L1_ENB, L1_IN3, L1_IN4, m2);
+  setMotor(L2_ENA, L2_IN1, L2_IN2, m3);
+  setMotor(L2_ENB, L2_IN3, L2_IN4, m4);
+}
+
 // ---------------- Command parsing ----------------
 void handleLine(char *line) {
   char *cmd = strtok(line, " \r\n");
@@ -66,6 +107,25 @@ void handleLine(char *line) {
 
   if (strcmp(cmd, "PING") == 0) {
     Serial.println("PONG");
+    return;
+  }
+
+  if (strcmp(cmd, "M") == 0) {
+    char *t1 = strtok(NULL, ",");
+    char *t2 = strtok(NULL, ",");
+    char *t3 = strtok(NULL, ",");
+    char *t4 = strtok(NULL, ",
+");
+    if (t1 && t2 && t3 && t4) {
+      int m1 = atoi(t1);
+      int m2 = atoi(t2);
+      int m3 = atoi(t3);
+      int m4 = atoi(t4);
+      setAllMotors(m1, m2, m3, m4);
+      Serial.println("OK M");
+    } else {
+      Serial.println("ERR M ARGS");
+    }
     return;
   }
 
@@ -117,6 +177,22 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
 
+  pinMode(L1_ENA, OUTPUT);
+  pinMode(L1_IN1, OUTPUT);
+  pinMode(L1_IN2, OUTPUT);
+  pinMode(L1_ENB, OUTPUT);
+  pinMode(L1_IN3, OUTPUT);
+  pinMode(L1_IN4, OUTPUT);
+
+  pinMode(L2_ENA, OUTPUT);
+  pinMode(L2_IN1, OUTPUT);
+  pinMode(L2_IN2, OUTPUT);
+  pinMode(L2_ENB, OUTPUT);
+  pinMode(L2_IN3, OUTPUT);
+  pinMode(L2_IN4, OUTPUT);
+
+  setAllMotors(0, 0, 0, 0);
+
   G1.attach(SERVO_G1);
   K1.attach(SERVO_K1);
   K2.attach(SERVO_K2);
@@ -132,12 +208,9 @@ void setup() {
   C1.write(lastServoPosC1);
 
   Wire.begin();
-  if (mpu.begin()) {
-    mpu.calcGyroOffsets(true);  // optional self-calibration; could be set manual
-    imuReady = true;
-  } else {
-    Serial.println("WARN NO_MPU6050");
-  }
+  mpu.begin();
+  mpu.calcGyroOffsets(true);  // optional self-calibration; could be set manual
+  imuReady = true;
 
   Serial.println("READY");
 }
