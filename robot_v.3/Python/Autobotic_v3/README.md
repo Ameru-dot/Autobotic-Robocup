@@ -220,6 +220,29 @@ git lfs install
 git lfs pull
 ```
 
+
+## SSH to RDK (remote access)
+
+On RDK (enable SSH):
+```bash
+sudo systemctl enable --now ssh
+sudo systemctl status ssh
+```
+
+Find RDK IP:
+```bash
+hostname -I
+```
+
+From laptop (PowerShell):
+```powershell
+ssh sunrise@<RDK_IP>
+```
+
+Tips:
+- Replace `sunrise` with your RDK username.
+- Make sure laptop and RDK are on the same Wi-Fi/hotspot.
+- If SSH fails, try `ping <RDK_IP>`.
 ## Troubleshooting
 
 No camera window:
