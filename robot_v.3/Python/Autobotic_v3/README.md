@@ -4,7 +4,7 @@ This folder contains the multi-process control stack for the RoboCup Rescue Line
 It is configured for:
 - RDK X5 (Linux)
 - Dual USB webcams via OpenCV (line + zone)
-- Yahboom 4-channel motor driver over USB serial
+- Dual L298N motor drivers (via Arduino Mega PWM)
 - Arduino Mega for IMU/IR sensors + servos (no motor control)
 
 Use this README as the main setup + run guide for the Autobotic_v3 code.
@@ -46,8 +46,7 @@ Processes are launched from `main.py` using multiprocessing and shared state in 
 ## Hardware mapping
 
 Serial ports (default):
-- Motor driver (Yahboom): `/dev/ttyUSB0`
-- Arduino Mega: `/dev/ttyACM0`
+- Arduino Mega (sensors + motors): `/dev/ttyACM0`
 
 Cameras (default):
 - Line camera (down): `/dev/video0`
@@ -69,6 +68,39 @@ ZONE_CAM_DEVICE=/dev/video2
 - Servos: use a separate 5V regulator if servo current is high; do not overload Arduino 5V.
 - Cameras: USB webcams to RDK; confirm device IDs with `ls /dev/video*`.
 - Safety: add a main power switch and fuse on the motor battery line.
+
+
+## L298N motor wiring (2 boards)
+
+Arduino Mega pin mapping (default in `arduino_bridge.ino`):
+
+Board #1 (Left motors):
+- ENA -> D5 (PWM)
+- IN1 -> D30
+- IN2 -> D31
+- ENB -> D6 (PWM)
+- IN3 -> D32
+- IN4 -> D33
+
+Board #2 (Right motors):
+- ENA -> D7 (PWM)
+- IN1 -> D34
+- IN2 -> D35
+- ENB -> D8 (PWM)
+- IN3 -> D36
+- IN4 -> D37
+
+Motor mapping:
+- M1 = Front Left (Board #1 OUT1/OUT2)
+- M2 = Back Left  (Board #1 OUT3/OUT4)
+- M3 = Front Right (Board #2 OUT1/OUT2)
+- M4 = Back Right (Board #2 OUT3/OUT4)
+
+Serial command format from RDK to Arduino:
+```
+M,m1,m2,m3,m4
+```
+Speed range: -255..255
 
 ## Camera test quickstart
 
@@ -154,7 +186,7 @@ Key outputs from perception:
 - Line: `line_error_x`, `line_found`, `turn_direction`
 - Zone: `ball_error_x`, `ball_conf`, `zone_green_found`, `zone_red_found`
 
-## Motor mapping
+## Motor mapping (L298N via Arduino)
 
 Default motor order (logical):
 - M1 = left
