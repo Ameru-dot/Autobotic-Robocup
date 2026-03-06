@@ -1,188 +1,200 @@
-# motor.py (Updated)
-
-import serial
+﻿import serial
 import time
-import logging
 
-logger = logging.getLogger(__name__)
+UPLOAD_DATA = 3  #0:不接受数据 1:接收总的编码器数据 2:接收实时的编码器 3:接收电机当前速度 mm/s
+                 #0: Do not receive data 1: Receive total encoder data 2: Receive real-time encoder 3: Receive current motor speed mm/s
 
-class MotorDriver:
-    def __init__(self, motor_pins_config=None, **kwargs):
-        if motor_pins_config is None:
-            motor_pins_config = {}
-        if not hasattr(motor_pins_config, "get"):
-            raise TypeError("motor_pins_config must be a mapping or None")
-        self.port = kwargs.get('port', motor_pins_config.get('PORT', '/dev/ttyUSB0'))
-        self.baudrate = kwargs.get('baudrate', motor_pins_config.get('BAUDRATE', 115200))
-        # Perhatikan: Nama atribut di sini adalah 'motor_type' (huruf kecil 't')
-        self.motor_type = kwargs.get('motor_type', motor_pins_config.get('MOTOR_TYPE', 2))
-        self.upload_data = kwargs.get('upload_data', motor_pins_config.get('UPLOAD_DATA', 1))
+MOTOR_TYPE = 1  #1:520电机 2:310电机 3:测速码盘TT电机 4:TT直流减速电机 5:L型520电机
+                #1:520 motor 2:310 motor 3:speed code disc TT motor 4:TT DC reduction motor 5:L type 520 motor
 
-        self.ser = None
-        try:
-            self.ser = serial.Serial(
-                port=self.port,
-                baudrate=self.baudrate,
-                parity=serial.PARITY_NONE,
-                stopbits=serial.STOPBITS_ONE,
-                bytesize=serial.EIGHTBITS,
-                timeout=1
-            )
-            self.recv_buffer = ""
-            self.init_motor()
-            logger.info(f"MotorDriver initialized with serial port {self.port} @ {self.baudrate} baud.")
-        except serial.SerialException as e:
-            logger.error(f"Failed to open serial port {self.port}: {e}", exc_info=True)
-            self.ser = None # Pastikan ia None jika gagal
+# 串口初始化    Serial port initialization
+ser = serial.Serial(
+    port='/dev/ttyUSB0',  # 根据实际情况修改为你的串口设备路径  Modify it to your serial port device path according to the actual situation
+    baudrate=115200,      # 波特率，需与驱动板一致  Baud rate, must be consistent with the driver board
+    parity=serial.PARITY_NONE,  # 无校验位  No check digit
+    stopbits=serial.STOPBITS_ONE,  # 一个停止位 One stop bit
+    bytesize=serial.EIGHTBITS,    # 数据位 8 位 Data bit 8 bits
+    timeout=1                     # 超时时间（秒） Timeout (seconds)
+)
 
-    def send_data(self, data):
-        if self.ser and self.ser.is_open:
-            try:
-                self.ser.write(data.encode())
-                time.sleep(0.01)
-            except serial.SerialException as e:
-                logger.error(f"Serial write error: {e}")
-        else:
-            logger.warning("Attempted to send data, but serial port is not open.")
+# 接收缓存  Receive Buffer
+recv_buffer = ""
 
-    def receive_data(self):
-        if self.ser and self.ser.in_waiting > 0:
-            self.recv_buffer += self.ser.read(self.ser.in_waiting).decode()
-            messages = self.recv_buffer.split("#")
-            self.recv_buffer = messages[-1]
-            if len(messages) > 1:
-                return messages[0] + "#"
-        return None
+# 发送数据  Sending Data
+def send_data(data):
+    ser.write(data.encode())  # 将字符串转换为字节后发送    Convert the string to bytes before sending
+    time.sleep(0.01)  # 延时确保数据发送完成    Delay to ensure data transmission is completed
 
-    def parse_data(self, data):
-        data = data.strip()
-        if data.startswith("$MAll:") or data.startswith("$MTEP:"):
-            values = list(map(int, data[6:-1].split(',')))
-            return ', '.join([f"M{i+1}:{v}" for i, v in enumerate(values)])
-        elif data.startswith("$MTP:"):
-            values = list(map(int, data[5:-1].split(',')))
-            return ', '.join([f"M{i+1}:{v}" for i, v in enumerate(values)])
-        elif data.startswith("$Mspeed:"):
-            values = list(map(int, data[8:-1].split(',')))
-            return ', '.join([f"M{i+1}:{v}" for i, v in enumerate(values)])
-        else:
-            return data
+# 接收数据  Receiving Data
+def receive_data():
+    global recv_buffer
+    if ser.in_waiting > 0:  # 检查串口缓冲区是否有数据  Check if there is data in the serial port buffer
+        recv_buffer += ser.read(ser.in_waiting).decode()  # 读取并解码数据  Read and decode data
+        
+        # 按结束符 "#" 分割消息 Split the message by the ending character "#"
+        messages = recv_buffer.split("#")
+        recv_buffer = messages[-1]
+        
+        if len(messages) > 1:
+            return messages[0] + "#"  #返回一条完整的消息   Return a complete message
+    return None
 
-    def init_motor(self):
-        logger.info(f"Initializing motor of type {self.motor_type}...")
-        if self.ser is None:
-            logger.error("Serial port not open, cannot initialize motor.")
-            return
+# 配置电机类型  Configure motor type
+def set_motor_type(data):
+    TYPE = data
+    send_data("$mtype:{}#".format(TYPE))
 
-        # === PEMBETULAN: Tukar self.MOTOR_TYPE kepada self.motor_type di bawah ===
-        if self.motor_type == 1:
-            self.set_motor_type(1)
+# 配置死区  Configuring Dead Zone
+def set_motor_deadzone(data):
+    DZ = data
+    send_data("$deadzone:{}#".format(DZ))
+
+# 配置磁环线    Configuring magnetic loop
+def set_pluse_line(data):
+    LINE = data
+    send_data("$mline:{}#".format(LINE))
+
+# 配置减速比    Configure the reduction ratio
+def set_pluse_phase(data):
+    PHASE = data
+    send_data("$mphase:{}#".format(PHASE))
+
+# 配置轮子直径  Configuration Diameter
+def set_wheel_dis(data):
+    WHEEL = data
+    send_data("$wdiameter:{}#".format(WHEEL))
+
+# 控制速度  Controlling Speed
+def control_speed(m1, m2, m3, m4):
+    send_data("$spd:{},{},{},{}#".format(m1, m2, m3, m4))
+
+# 控制PWM(适用于无编码器的电机) Control PWM (for motors without encoder)
+def control_pwm(m1, m2, m3, m4):
+    send_data("$pwm:{},{},{},{}#".format(m1, m2, m3, m4))
+
+# 解析接收到的数据  Parsing received data
+def parse_data(data):
+    data = data.strip()  # 去掉两端的空格或换行符   Remove spaces or line breaks at both ends
+
+    if data.startswith("$MAll:"):
+        values_str = data[6:-1]  # 去除 "$MAll:" 和 "#" Remove "$MAll:" and "#"
+        values = list(map(int, values_str.split(',')))  # 分割并转换为整数  Split and convert to integer
+        parsed = ', '.join([f"M{i+1}:{value}" for i, value in enumerate(values)])
+        return parsed
+    elif data.startswith("$MTEP:"):
+        values_str = data[6:-1]
+        values = list(map(int, values_str.split(',')))
+        parsed = ', '.join([f"M{i+1}:{value}" for i, value in enumerate(values)])
+        return parsed
+    elif data.startswith("$MSPD:"):
+        values_str = data[6:-1]
+        values = [float(value) if '.' in value else int(value) for value in values_str.split(',')]
+        parsed = ', '.join([f"M{i+1}:{value}" for i, value in enumerate(values)])
+        return parsed
+
+#需要接收数据的开关	Switch that needs to receive data
+def send_upload_command(mode):
+    if mode == 0:
+        send_data("$upload:0,0,0#")
+    elif mode == 1:
+        send_data("$upload:1,0,0#")
+    elif mode == 2:
+        send_data("$upload:0,1,0#")
+    elif mode == 3:
+        send_data("$upload:0,0,1#")
+
+##以下的参数根据自己的实际使用电机配置即可，只要配置一次即可，电机驱动板有断电保存功能
+##The following parameters can be configured according to the actual motor you use. You only need to configure it once. The motor driver board has a power-off saving function.
+def set_motor_parameter():
+
+    if MOTOR_TYPE == 1:
+        set_motor_type(1)  # 配置电机类型   Configure motor type
+        time.sleep(0.1)
+        set_pluse_phase(30)  # 配置减速比，查电机手册得出   Configure the reduction ratio and check the motor manual for the result.
+        time.sleep(0.1)
+        set_pluse_line(11)  # 配置磁环线，查电机手册得出    Configure the magnetic ring wire and check the motor manual to get the result
+        time.sleep(0.1)
+        set_wheel_dis(67.00)  # 配置轮子直径，测量得出  Configure the wheel diameter and measure it
+        time.sleep(0.1)
+        set_motor_deadzone(1600)  # 配置电机死区，实验得出  Configure the motor dead zone, and the experiment shows
+        time.sleep(0.1)
+
+    elif MOTOR_TYPE == 2:
+        set_motor_type(2)
+        time.sleep(0.1)
+        set_pluse_phase(20)
+        time.sleep(0.1)
+        set_pluse_line(13)
+        time.sleep(0.1)
+        set_wheel_dis(48.00)
+        time.sleep(0.1)
+        set_motor_deadzone(1300)
+        time.sleep(0.1)
+
+    elif MOTOR_TYPE == 3:
+        set_motor_type(3)
+        time.sleep(0.1)
+        set_pluse_phase(45)
+        time.sleep(0.1)
+        set_pluse_line(13)
+        time.sleep(0.1)
+        set_wheel_dis(68.00)
+        time.sleep(0.1)
+        set_motor_deadzone(1250)
+        time.sleep(0.1)
+
+    elif MOTOR_TYPE == 4:
+        set_motor_type(4)
+        time.sleep(0.1)
+        set_pluse_phase(48)
+        time.sleep(0.1)
+        set_motor_deadzone(1000)
+        time.sleep(0.1)
+
+    elif MOTOR_TYPE == 5:
+        set_motor_type(1)
+        time.sleep(0.1)
+        set_pluse_phase(40)
+        time.sleep(0.1)
+        set_pluse_line(11)
+        time.sleep(0.1)
+        set_wheel_dis(67.00)
+        time.sleep(0.1)
+        set_motor_deadzone(1600)
+        time.sleep(0.1)
+
+if __name__ == "__main__":
+    try:
+        t = 0
+        print("please wait...")
+        send_upload_command(UPLOAD_DATA)#给电机模块发送需要上报的数据	Send the data that needs to be reported to the motor module
+        time.sleep(0.1)
+        set_motor_parameter()#设计电机参数  Design motor parameters
+
+        while True:
+            received_message = receive_data()  # 接收消息    Receiving Messages
+            if received_message:    # 如果有数据返回 If there is data returned
+                parsed = parse_data(received_message) # 解析数据 Parsing the data
+                if parsed:
+                    print(parsed)  # 打印解析后的数据   Print the parsed data
+
+            t += 10
+            M1 = t
+            M2 = t
+            M3 = t
+            M4 = t
+
+            if MOTOR_TYPE == 4:
+                control_pwm(M1*2, M2*2, M3*2, M4*2)
+            else:
+                control_speed(M1, M2, M3, M4)#直接发送命令控制电机  Send commands directly to control the motor
+
+            if t> 1000 or t < -1000:
+                t = 0
+
             time.sleep(0.1)
-            self.set_pluse_phase(20)
-            time.sleep(0.1)
-            self.set_pluse_line(13)
-            time.sleep(0.1)
-            self.set_wheel_dis(67.0)
-            time.sleep(0.1)
-            self.set_motor_deadzone(1600)
-            time.sleep(0.1)
-        elif self.motor_type == 2:
-            self.set_motor_type(2)
-            time.sleep(0.1)
-            self.set_pluse_phase(20)
-            time.sleep(0.1)
-            self.set_pluse_line(13)
-            time.sleep(0.1)
-            self.set_wheel_dis(48.0)
-            time.sleep(0.1)
-            self.set_motor_deadzone(1300)
-            time.sleep(0.1)
-        elif self.motor_type == 3:
-            self.set_motor_type(3)
-            time.sleep(0.1)
-            self.set_pluse_phase(45)
-            time.sleep(0.1)
-            self.set_pluse_line(13)
-            time.sleep(0.1)
-            self.set_wheel_dis(68.0)
-            time.sleep(0.1)
-            self.set_motor_deadzone(1250)
-            time.sleep(0.1)
-        elif self.motor_type == 4:
-            self.set_motor_type(4)
-            time.sleep(0.1)
-            self.set_pluse_phase(48)
-            time.sleep(0.1)
-            self.set_motor_deadzone(1600)
-            time.sleep(0.1)
 
-        self.set_upload_data(self.upload_data) # Juga pastikan 'upload_data' adalah huruf kecil
-        logger.info("Motor initialization sequence completed.")
-
-    # Kaedah kawalan motor
-    def set_motor_type(self, type_val):
-        self.send_data(f"$MRTTP:{type_val}#")
-
-    def set_pluse_phase(self, value):
-        self.send_data(f"$MRTPP:{value}#")
-
-    def set_pluse_line(self, value):
-        self.send_data(f"$MRTPL:{value}#")
-
-    def set_wheel_dis(self, value):
-        self.send_data(f"$MRTWL:{value}#")
-
-    def set_motor_deadzone(self, value):
-        self.send_data(f"$MRTCDZ:{value}#")
-
-    def set_upload_data(self, value):
-        self.send_data(f"$MRTUD:{value}#")
-
-    def set_all_motor_speed(self, m1, m2, m3, m4):
-        if self.ser is None:
-            logger.warning("Attempted to set motor speed, but serial port is not open.")
-            return
-        self.send_data(f"$MAll:{m1},{m2},{m3},{m4}#")
-
-    def control_speed(self, m1, m2, m3, m4):
-        self.set_all_motor_speed(m1, m2, m3, m4)
-
-    def control_pwm(self, m1, m2, m3, m4):
-        self.set_all_motor_speed(m1, m2, m3, m4)
-
-    def set_m1_speed(self, speed):
-        if self.ser is None:
-            logger.warning("Attempted to set M1 speed, but serial port is not open.")
-            return
-        self.send_data(f"$M1:{speed}#")
-
-    def set_m2_speed(self, speed):
-        if self.ser is None:
-            logger.warning("Attempted to set M2 speed, but serial port is not open.")
-            return
-        self.send_data(f"$M2:{speed}#")
-
-    def set_left_speed(self, speed):
-        mapped_speed = int(speed * 10000)
-        self.set_m1_speed(mapped_speed)
-
-    def set_right_speed(self, speed):
-        mapped_speed = int(speed * 10000)
-        self.set_m2_speed(mapped_speed)
-
-    def stop(self):
-        self.set_all_motor_speed(0, 0, 0, 0)
-        logger.info("Motors stopped.")
-
-    def brake(self):
-        self.stop()
-
-    def cleanup(self):
-        if self.ser and self.ser.is_open:
-            self.ser.close()
-            logger.info(f"Serial port {self.port} closed.")
-        else:
-            logger.info("Serial port was not open or already closed.")
-    
-    def close_serial(self):
-        self.cleanup()
+    except KeyboardInterrupt:
+        control_pwm(0, 0, 0, 0)#让电机停下来  Stop the motor
+    finally:
+        ser.close()  # 关闭串口 Close the serial port
