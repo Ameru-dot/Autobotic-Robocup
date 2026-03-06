@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Launcher that mirrors the original folder structure but uses the new hardware:
-- RDK X5 + dual CSI cameras (Picamera2/libcamera, Cam0/Cam1)
+Launcher that mirrors Autobotic_v3 logic but keeps Yahboom hardware:
+- RDK X5 + dual CSI cameras (Line: Raspberry Pi Cam v1, Zone: Arducam)
+  - Use env vars LINE_CAM_INDEX (default 0) and ZONE_CAM_INDEX (default 1)
 - Yahboom motor driver over USB serial
-- Arduino serial for IMU/IR + servos
+- Arduino serial for IMU/IR + servos (if connected)
 - Omni-wheel kinematics
 
 Processes:

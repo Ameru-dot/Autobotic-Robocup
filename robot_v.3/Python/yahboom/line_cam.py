@@ -20,6 +20,9 @@ os.environ["LIBCAMERA_LOG_LEVELS"] = "4"
 camera_x = 448
 camera_y = 252
 
+# Line camera: Raspberry Pi Camera v1 (CSI)
+LINE_CAM_INDEX = int(os.environ.get("LINE_CAM_INDEX", "0"))
+
 calibration_square_size = 25
 
 # These are not actually used, but are here for reference
@@ -113,44 +116,29 @@ def check_contour_size(contours, contour_color="red", size=15000):
 
 
 def check_green(contours_grn, black_image):
-    line_center_x = camera_x / 2
-    moments = cv2.moments(black_image)
-    if moments["m00"] != 0:
-        line_center_x = int(moments["m10"] / moments["m00"])
+    black_around_sign = np.zeros((len(contours_grn), 5), dtype=np.int16)  # [[b,t,l,r,lp], [b,t,l,r,lp]]
 
-    left_count = 0
-    right_count = 0
-    tolerance = 20
-    ignore_y = camera_y * 0.9
-
-    for contour in contours_grn:
+    for i, contour in enumerate(contours_grn):
         area = cv2.contourArea(contour)
-        if area <= 1500:
+        if area <= 2500:
             continue
 
-        x, y, w, h = cv2.boundingRect(contour)
-        if (y + h) > ignore_y:
-            continue
+        green_box = cv2.boxPoints(cv2.minAreaRect(contour))
+        draw_box = np.intp(green_box)
+        cv2.drawContours(cv2_img, [draw_box], -1, (0, 0, 255), 2)
 
-        cx = x + w // 2
-        if cx < line_center_x - tolerance:
-            left_count += 1
-            color = (0, 255, 0)
-        elif cx > line_center_x + tolerance:
-            right_count += 1
-            color = (0, 0, 255)
-        else:
-            color = (255, 0, 0)
+        black_around_sign = check_black(black_around_sign, i, green_box, black_image.copy())
 
-        cv2.rectangle(cv2_img, (x, y), (x + w, y + h), color, 2)
+    turn_left, turn_right, left_bottom, right_bottom = determine_turn_direction(black_around_sign)
 
-    if left_count > 0 and right_count > 0:
-        return "turn_around"
-    if left_count > 0:
+    if turn_left and not turn_right and not left_bottom:
         return "left"
-    if right_count > 0:
+    elif turn_right and not turn_left and not right_bottom:
         return "right"
-    return "straight"
+    elif turn_left and turn_right and not (left_bottom and right_bottom):
+        return "turn_around"
+    else:
+        return "straight"
 
 
 @njit(cache=True)
@@ -555,7 +543,7 @@ def line_cam_loop():
     time_last_bottom_point_x = empty_time_arr()
     time_last_average_line_point = empty_time_arr()
 
-    camera = Picamera2(0)
+    camera = Picamera2(LINE_CAM_INDEX)
 
     mode = camera.sensor_modes[0]
     camera.configure(camera.create_video_configuration(sensor={'output_size': mode['size'], 'bit_depth': mode['bit_depth']}))
@@ -565,7 +553,7 @@ def line_cam_loop():
     time.sleep(0.1)
 
     if not debug_mode:
-        shm_cam1 = shared_memory.SharedMemory(name="shm_line", create=True, size=338688)
+        shm_cam1 = shared_memory.SharedMemory(name="shm_cam_1", create=True, size=338688)
 
     calibration_saved = True
     update_color_values()
@@ -1104,15 +1092,6 @@ def line_cam_loop():
                 counter = 0
 
             cv2.putText(cv2_img, str(fps), (int(camera_x * 0.92), int(camera_y * 0.05)), cv2.FONT_HERSHEY_DUPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
-
-            line_found.value = line_detected.value
-            if line_detected.value:
-                line_error_x.value = max(-1.0, min(1.0, line_angle.value / 180.0))
-            else:
-                line_error_x.value = 0.0
-            turn_direction.value = turn_dir.value
-            silver_prob.value = max(0.0, min(1.0, silver_value.value))
-            red_line_detected.value = red_detected.value
 
             # Checking the shared memory buffer size of the image
             # print(cv2_img.size)

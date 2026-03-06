@@ -13,6 +13,9 @@ from mp_manager import *
 camera_width = 640
 camera_height = 480
 
+# Zone camera: Arducam (CSI)
+ZONE_CAM_INDEX = int(os.environ.get("ZONE_CAM_INDEX", "1"))
+
 calibration_square_size = 25
 horizontal_center = camera_width // 2
 
@@ -200,18 +203,10 @@ def zone_cam_loop():
                     elif zone_status.value == "deposit_green":
                         contours_green = get_green_contours(cv2_img)
                         corner_distance.value, corner_size.value = check_contours(contours_green, cv2_img, (0, 0, 255))
-                        zone_green_found.value = corner_size.value > 0 and corner_distance.value != -181
-                        zone_green_error_x.value = max(-1.0, min(1.0, corner_distance.value / 180.0))
-                        zone_red_found.value = False
-                        zone_red_error_x.value = 0.0
 
                     elif zone_status.value == "deposit_red":
                         contours_red = get_red_contours(cv2_img)
                         corner_distance.value, corner_size.value = check_contours(contours_red, cv2_img, (0, 255, 0))
-                        zone_red_found.value = corner_size.value > 0 and corner_distance.value != -181
-                        zone_red_error_x.value = max(-1.0, min(1.0, corner_distance.value / 180.0))
-                        zone_green_found.value = False
-                        zone_green_error_x.value = 0.0
 
 
             elif calibrate_color_status.value == "calibrate" and (calibration_color.value == "z-r" or calibration_color.value == "z-g"):
