@@ -130,11 +130,13 @@ def zone_cam_loop():
     crop_height = int(camera_height * crop_percentage)
 
     if use_rdk:
+        pipe_id = int(os.environ.get("ZONE_PIPE_ID", os.environ.get("RDK_PIPE_ID", "0")))
         camera = RDKCamera(
             camera_index=ZONE_CAM_INDEX,
             width=camera_width,
             height=camera_height,
             fps=-1,
+            pipe_id=pipe_id,
         )
     else:
         if Picamera2 is None:

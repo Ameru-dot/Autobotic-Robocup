@@ -551,11 +551,13 @@ def line_cam_loop():
     time_last_average_line_point = empty_time_arr()
 
     if use_rdk:
+        pipe_id = int(os.environ.get("LINE_PIPE_ID", os.environ.get("RDK_PIPE_ID", "0")))
         camera = RDKCamera(
             camera_index=LINE_CAM_INDEX,
             width=camera_x,
             height=camera_y,
             fps=-1,
+            pipe_id=pipe_id,
         )
     else:
         if Picamera2 is None:
@@ -570,7 +572,7 @@ def line_cam_loop():
         time.sleep(0.1)
 
     if not debug_mode:
-        shm_cam1 = shared_memory.SharedMemory(name="shm_cam_1", create=True, size=338688)
+        shm_cam1 = shared_memory.SharedMemory(name="shm_line", create=True, size=338688)
 
     calibration_saved = True
     update_color_values()
