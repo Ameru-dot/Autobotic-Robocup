@@ -118,7 +118,13 @@ def get_red_contours(image):
 
 
 def zone_cam_loop():
-    model = YOLO('../../Ai/models/ball_zone_s/ball_detect_s_edgetpu.tflite', task='detect')
+    model_path = os.environ.get("ZONE_MODEL_PATH")
+    if not model_path:
+        if use_rdk:
+            model_path = "../../Ai/models/ball_zone_s/ball_detect_s.pt"
+        else:
+            model_path = "../../Ai/models/ball_zone_s/ball_detect_s_edgetpu.tflite"
+    model = YOLO(model_path, task='detect')
 
     crop_percentage = 0.45
     crop_height = int(camera_height * crop_percentage)
