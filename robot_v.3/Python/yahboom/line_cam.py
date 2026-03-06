@@ -2,9 +2,13 @@ import os
 from multiprocessing import shared_memory
 
 import cv2
-from libcamera import controls
 from numba import njit
-from picamera2 import Picamera2
+try:
+    from picamera2 import Picamera2
+    from libcamera import controls
+except Exception:
+    Picamera2 = None
+    controls = None
 from skimage.metrics import structural_similarity
 from ultralytics import YOLO
 
@@ -14,15 +18,17 @@ from rdk_camera import RDKCamera, RDK_AVAILABLE
 
 debug_mode = False
 
-# Disable libcamera and Picamera2 logging
-Picamera2.set_logging(Picamera2.ERROR)
-os.environ["LIBCAMERA_LOG_LEVELS"] = "4"
+# Disable libcamera and Picamera2 logging (if available)
+if Picamera2 is not None:
+    Picamera2.set_logging(Picamera2.ERROR)
+    os.environ["LIBCAMERA_LOG_LEVELS"] = "4"
 
 camera_x = 448
 camera_y = 252
 
 # Line camera: Raspberry Pi Camera v1 (CSI)
 LINE_CAM_INDEX = int(os.environ.get("LINE_CAM_INDEX", "0"))
+use_rdk = RDK_AVAILABLE and os.environ.get("USE_RDK_CAMERA", "1") == "1"
 
 calibration_square_size = 25
 
@@ -544,14 +550,24 @@ def line_cam_loop():
     time_last_bottom_point_x = empty_time_arr()
     time_last_average_line_point = empty_time_arr()
 
-    camera = Picamera2(LINE_CAM_INDEX)
+    if use_rdk:
+        camera = RDKCamera(
+            camera_index=LINE_CAM_INDEX,
+            width=camera_x,
+            height=camera_y,
+            fps=-1,
+        )
+    else:
+        if Picamera2 is None:
+            raise RuntimeError("Picamera2/libcamera not available. Set USE_RDK_CAMERA=1 for RDK MIPI.")
+        camera = Picamera2(LINE_CAM_INDEX)
 
-    mode = camera.sensor_modes[0]
-    camera.configure(camera.create_video_configuration(sensor={'output_size': mode['size'], 'bit_depth': mode['bit_depth']}))
+        mode = camera.sensor_modes[0]
+        camera.configure(camera.create_video_configuration(sensor={'output_size': mode['size'], 'bit_depth': mode['bit_depth']}))
 
-    camera.start()
-    camera.set_controls({"AfMode": controls.AfModeEnum.Manual, "LensPosition": 6.5, "FrameDurationLimits": (1000000 // 50, 1000000 // 50)})  # {"AfMode": controls.AfModeEnum.Manual, "LensPosition": 0.4} {"AfMode": controls.AfModeEnum.Continuous, "AfSpeed": controls.AfSpeedEnum.Fast}
-    time.sleep(0.1)
+        camera.start()
+        camera.set_controls({"AfMode": controls.AfModeEnum.Manual, "LensPosition": 6.5, "FrameDurationLimits": (1000000 // 50, 1000000 // 50)})  # {"AfMode": controls.AfModeEnum.Manual, "LensPosition": 0.4} {"AfMode": controls.AfModeEnum.Continuous, "AfSpeed": controls.AfSpeedEnum.Fast}
+        time.sleep(0.1)
 
     if not debug_mode:
         shm_cam1 = shared_memory.SharedMemory(name="shm_cam_1", create=True, size=338688)
@@ -588,9 +604,18 @@ def line_cam_loop():
     check_similarity_limit = 30
 
     while not terminate.value:
-        raw_capture = camera.capture_array()
-        raw_capture = cv2.resize(raw_capture, (camera_x, camera_y))
-        cv2_img = cv2.cvtColor(raw_capture, cv2.COLOR_RGBA2BGR)
+        if use_rdk:
+            raw_capture = camera.read()
+            if raw_capture is None:
+                time.sleep(0.002)
+                continue
+            if raw_capture.shape[1] != camera_x or raw_capture.shape[0] != camera_y:
+                raw_capture = cv2.resize(raw_capture, (camera_x, camera_y))
+            cv2_img = raw_capture
+        else:
+            raw_capture = camera.capture_array()
+            raw_capture = cv2.resize(raw_capture, (camera_x, camera_y))
+            cv2_img = cv2.cvtColor(raw_capture, cv2.COLOR_RGBA2BGR)
 
         frame_limit = max_frames_zone if objective.value == "zone" and (zone_status.value == "begin" or zone_status.value == "find_balls" or zone_status.value == "pickup_ball") else max_frames_line
         if objective.value == "follow_line" and not rotation_y.value in ["ramp_down", "ramp_up"]:
