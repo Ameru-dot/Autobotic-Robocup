@@ -1,6 +1,6 @@
-import pygame
-import time
+﻿import time
 import serial
+import pygame
 
 PORT = "/dev/ttyACM0"
 BAUD = 115200
@@ -9,8 +9,7 @@ SPEED1 = 200
 
 
 def send(ser, m1, m2, m3, m4):
-    cmd = f"M,{m1},{m2},{m3},{m4}
-"
+    cmd = f"M,{m1},{m2},{m3},{m4}\n"
     ser.write(cmd.encode())
 
 

@@ -1,10 +1,8 @@
-import time
+﻿import time
 
-from motor import MotorDriver
+import motor
 from mp_manager import motor_fl, motor_fr, motor_bl, motor_br, terminate
 
-MOTOR_PORT = "/dev/ttyUSB0"
-MOTOR_BAUD = 115200
 MOTOR_TYPE = 2
 UPLOAD_DATA = 1
 MOTOR_PERIOD = 0.03
@@ -24,25 +22,22 @@ def scale_speed(value: int) -> int:
     return max(-SPEED_MAX, min(SPEED_MAX, scaled))
 
 
-def connect_driver() -> MotorDriver:
-    return MotorDriver(
-        port=MOTOR_PORT,
-        baudrate=MOTOR_BAUD,
-        motor_type=MOTOR_TYPE,
-        upload_data=UPLOAD_DATA,
-    )
+def init_driver():
+    # Apply motor config once at startup (optional but matches Yahboom example)
+    try:
+        motor.MOTOR_TYPE = MOTOR_TYPE
+        motor.send_upload_command(UPLOAD_DATA)
+        time.sleep(0.1)
+        motor.set_motor_parameter()
+    except Exception:
+        pass
 
 
 def motor_loop():
-    md = connect_driver()
+    init_driver()
     last_sent = (0, 0, 0, 0)
     last_send_time = 0.0
     while not terminate.value:
-        if md.ser is None:
-            time.sleep(1.0)
-            md = connect_driver()
-            continue
-
         now = time.time()
         desired = (motor_fl.value, motor_fr.value, motor_bl.value, motor_br.value)
         changed = desired != last_sent
@@ -57,14 +52,13 @@ def motor_loop():
                     val = -val
                 ordered.append(val)
             scaled = tuple(scale_speed(v) for v in ordered)
-            md.control_speed(*scaled)
+            motor.control_speed(*scaled)
             last_sent = desired
             last_send_time = now
 
         time.sleep(0.005)
 
     try:
-        md.control_speed(0, 0, 0, 0)
+        motor.control_pwm(0, 0, 0, 0)
     except Exception:
         pass
-    md.cleanup()

@@ -1,5 +1,5 @@
-"""
-Manual keyboard control using pygame.
+﻿"""
+Manual keyboard control using pygame (shared-memory version).
 - W/S: forward/backward (vy)
 - A/D: strafe left/right (vx)
 - Q/E: rotate left/right (omega)
