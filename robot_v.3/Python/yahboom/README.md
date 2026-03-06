@@ -30,11 +30,11 @@ Folder ini telah diselaraskan supaya **logic sama seperti `Autobotic_v3`**, teta
 - GND ? GND
 
 ### E) LED Indicator (Optional)
-- LED ? **D22** (guna resistor 220–330O)
+- LED ? **D22** (guna resistor 220Â–330O)
 - GND ? GND
 
 ### F) Servo (Jika ada, optional)
-- Signal servo ? **D24–D29** (ikut code)
+- Signal servo ? **D24Â–D29** (ikut code)
 - VCC ? 5V (power berasingan jika banyak servo)
 - GND ? GND
 
@@ -75,12 +75,16 @@ source .venv/bin/activate
 ```bash
 pip install -U pip setuptools wheel
 pip install opencv-python numpy numba scikit-image ultralytics pillow pyserial
-pip install picamera2
 ```
 
 > Jika guna **ONNX** (silver detect), install:
 ```bash
 pip install onnx onnxruntime
+```
+
+> Untuk **zone detect** guna model `.pt`, perlukan **torch**:
+```bash
+pip install torch
 ```
 
 ---
@@ -89,22 +93,32 @@ pip install onnx onnxruntime
 
 ### A) Full system (line + zone + motor + UI)
 ```bash
-LINE_CAM_INDEX=0 ZONE_CAM_INDEX=1 python3 main.py
+USE_RDK_CAMERA=1 LINE_CAM_INDEX=0 ZONE_CAM_INDEX=1 LINE_PIPE_ID=0 ZONE_PIPE_ID=2 python3 main.py
 ```
 
-### B) Line camera sahaja
+### B) Full system (test tanpa hardware motor/sensor)
 ```bash
-LINE_CAM_INDEX=0 python3 test_line.py
+USE_RDK_CAMERA=1 LINE_CAM_INDEX=0 ZONE_CAM_INDEX=1 LINE_PIPE_ID=0 ZONE_PIPE_ID=2 python3 main_test.py
 ```
 
-### C) Zone camera sahaja
+### C) Line camera sahaja (test)
 ```bash
-ZONE_CAM_INDEX=1 python3 zone_test.py
+USE_RDK_CAMERA=1 LINE_CAM_INDEX=0 LINE_PIPE_ID=0 python3 test_line.py
 ```
 
-### D) Line + motor sahaja
+### D) Zone camera sahaja (test)
 ```bash
-LINE_CAM_INDEX=0 python3 main_line_motor.py
+USE_RDK_CAMERA=1 ZONE_CAM_INDEX=1 ZONE_PIPE_ID=2 python3 zone_test.py
+```
+
+### E) Line + motor sahaja
+```bash
+USE_RDK_CAMERA=1 LINE_CAM_INDEX=0 LINE_PIPE_ID=0 python3 main_line_motor.py
+```
+
+### F) Headless (tanpa UI/HDMI)
+```bash
+START_UI=0 USE_RDK_CAMERA=1 LINE_CAM_INDEX=0 ZONE_CAM_INDEX=1 LINE_PIPE_ID=0 ZONE_PIPE_ID=2 python3 main.py
 ```
 
 ---
@@ -116,9 +130,13 @@ LINE_CAM_INDEX=0 python3 main_line_motor.py
 ls /dev/ttyUSB*
 ls /dev/ttyACM*
 ```
-- **Jika kamera tidak keluar**, pastikan CSI terpasang betul dan guna index yang betul:
+- **Jika kamera tidak keluar**, pastikan CSI terpasang betul dan guna index yang betul.
+- **Dual camera** di RDK perlu **pipe berasingan**:
+  - Line: `LINE_PIPE_ID=0`
+  - Zone: `ZONE_PIPE_ID=2`
+- Contoh run:
 ```bash
-LINE_CAM_INDEX=0 ZONE_CAM_INDEX=1 python3 main.py
+USE_RDK_CAMERA=1 LINE_CAM_INDEX=0 ZONE_CAM_INDEX=1 LINE_PIPE_ID=0 ZONE_PIPE_ID=2 python3 main.py
 ```
 - **Motor mapping Yahboom** (dalam `motor_serial.py`):
   - M1 = kiri
@@ -130,13 +148,13 @@ LINE_CAM_INDEX=0 ZONE_CAM_INDEX=1 python3 main.py
 
 ## 6) Fail Utama
 
-- `main.py` — full system
-- `line_cam.py` — line detection
-- `zone_cam.py` — zone & ball detection
-- `control.py` — control logic (omni kinematics)
-- `motor_serial.py` — Yahboom motor driver
-- `sensor_serial.py` — Arduino IMU/IR/servo
-- `ui_tk.py` — UI utama
+- `main.py` Â— full system
+- `line_cam.py` Â— line detection
+- `zone_cam.py` Â— zone & ball detection
+- `control.py` Â— control logic (omni kinematics)
+- `motor_serial.py` Â— Yahboom motor driver
+- `sensor_serial.py` Â— Arduino IMU/IR/servo
+- `ui_tk.py` Â— UI utama
 
 ---
 
@@ -184,4 +202,16 @@ x11vnc -forever -shared -display :0
 Kemudian sambung VNC ke:
 ```
 <IP_RDK>:5900
+```
+
+---
+
+## 9) Nota Kamera RDK (MIPI)
+- Gunakan `USE_RDK_CAMERA=1` untuk backend RDK.
+- `LINE_CAM_INDEX` untuk line cam, `ZONE_CAM_INDEX` untuk zone cam.
+- `LINE_PIPE_ID` dan `ZONE_PIPE_ID` **wajib berasingan** supaya dua kamera tak conflict.
+- Jika kamera busy:
+```bash
+sudo pkill -f mipi_camera.py
+sudo python3 /usr/bin/hobot_reset_camera.py
 ```
