@@ -2,7 +2,12 @@ import os
 from multiprocessing import shared_memory
 
 import cv2
-from picamera2 import Picamera2
+try:
+    from picamera2 import Picamera2
+    from libcamera import controls
+except Exception:
+    Picamera2 = None
+    controls = None
 from skimage.metrics import structural_similarity
 from ultralytics import YOLO
 from ultralytics.utils.plotting import colors
@@ -16,6 +21,7 @@ camera_height = 480
 
 # Zone camera: Arducam (CSI)
 ZONE_CAM_INDEX = int(os.environ.get("ZONE_CAM_INDEX", "1"))
+use_rdk = RDK_AVAILABLE and os.environ.get("USE_RDK_CAMERA", "1") == "1"
 # Rotate output if camera is mounted upside-down (0/90/180/270).
 ZONE_CAM_ROTATE = int(os.environ.get("ZONE_CAM_ROTATE", "180"))
 
@@ -117,8 +123,18 @@ def zone_cam_loop():
     crop_percentage = 0.45
     crop_height = int(camera_height * crop_percentage)
 
-    camera = Picamera2(1)
-    camera.start()
+    if use_rdk:
+        camera = RDKCamera(
+            camera_index=ZONE_CAM_INDEX,
+            width=camera_width,
+            height=camera_height,
+            fps=-1,
+        )
+    else:
+        if Picamera2 is None:
+            raise RuntimeError("Picamera2/libcamera not available. Set USE_RDK_CAMERA=1 for RDK MIPI.")
+        camera = Picamera2(ZONE_CAM_INDEX)
+        camera.start()
 
     shm_cam2 = shared_memory.SharedMemory(name="shm_zone", create=True, size=506880)
 
@@ -146,11 +162,12 @@ def zone_cam_loop():
             if raw_capture is None:
                 time.sleep(0.005)
                 continue
+            cv2_img = raw_capture
         else:
             raw_capture = camera.capture_array()
-        raw_capture = rotate_frame(raw_capture)
-        raw_capture = raw_capture[crop_height:, :]
-        cv2_img = cv2.cvtColor(raw_capture, cv2.COLOR_RGBA2BGR)
+            cv2_img = cv2.cvtColor(raw_capture, cv2.COLOR_RGBA2BGR)
+        cv2_img = rotate_frame(cv2_img)
+        cv2_img = cv2_img[crop_height:, :]
 
         if capture_image.value:
             save_image(cv2_img)
