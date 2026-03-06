@@ -70,15 +70,16 @@ def ui_loop():
     root.rowconfigure(0, weight=1)
 
     # Scrollable left panel
-    left_container = ttk.Frame(root)
+    left_container = ttk.Frame(root, width=320)
     left_container.grid(row=0, column=0, sticky="ns")
+    left_container.grid_propagate(False)
 
-    left_canvas = tk.Canvas(left_container, highlightthickness=0)
+    left_canvas = tk.Canvas(left_container, highlightthickness=0, width=320)
     left_scroll = ttk.Scrollbar(left_container, orient="vertical", command=left_canvas.yview)
     left_canvas.configure(yscrollcommand=left_scroll.set)
 
     left_scroll.pack(side="right", fill="y")
-    left_canvas.pack(side="left", fill="y", expand=True)
+    left_canvas.pack(side="left", fill="both", expand=True)
 
     left = ttk.Frame(left_canvas, padding=10)
     left_window = left_canvas.create_window((0, 0), window=left, anchor="nw")
