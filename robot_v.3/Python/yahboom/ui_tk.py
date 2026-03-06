@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
+import cv2
 import numpy as np
 from multiprocessing import shared_memory
 
@@ -201,7 +202,7 @@ def ui_loop():
             if arr_line is None:
                 shm_line, arr_line = attach_shm(LINE_SHM_NAME, LINE_SIZE)
             if arr_line is not None:
-                img = Image.fromarray(arr_line.copy())
+                img = Image.fromarray(cv2.cvtColor(arr_line.copy(), cv2.COLOR_BGR2RGB))
                 img = img.resize((520, 292))
                 cam1_img = ImageTk.PhotoImage(img)
                 cam1_label.configure(image=cam1_img, text="")
@@ -212,7 +213,7 @@ def ui_loop():
             if arr_zone is None:
                 shm_zone, arr_zone = attach_shm(ZONE_SHM_NAME, ZONE_SIZE)
             if arr_zone is not None:
-                img = Image.fromarray(arr_zone.copy())
+                img = Image.fromarray(cv2.cvtColor(arr_zone.copy(), cv2.COLOR_BGR2RGB))
                 img = img.resize((520, 292))
                 cam2_img = ImageTk.PhotoImage(img)
                 cam2_label.configure(image=cam2_img, text="")
