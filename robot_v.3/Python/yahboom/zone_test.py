@@ -11,8 +11,20 @@ except Exception:
 from rdk_camera import RDKCamera, RDK_AVAILABLE
 
 
+def rotate_frame(frame, rotate):
+    if rotate == 180:
+        return cv2.rotate(frame, cv2.ROTATE_180)
+    if rotate == 90:
+        return cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+    if rotate == 270:
+        return cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    return frame
+
+
 def main():
     cam_index = int(os.environ.get("ZONE_CAM_INDEX", "1"))
+    rotate = int(os.environ.get("ZONE_CAM_ROTATE", "180"))
+
     width = 640
     height = 480
     crop_percentage = 0.45
@@ -40,6 +52,8 @@ def main():
                     continue
             else:
                 frame = camera.capture_array()
+
+            frame = rotate_frame(frame, rotate)
             frame = frame[crop_height:, :]
 
             counter += 1

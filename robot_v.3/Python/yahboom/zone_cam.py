@@ -16,6 +16,8 @@ camera_height = 480
 
 # Zone camera: Arducam (CSI)
 ZONE_CAM_INDEX = int(os.environ.get("ZONE_CAM_INDEX", "1"))
+# Rotate output if camera is mounted upside-down (0/90/180/270).
+ZONE_CAM_ROTATE = int(os.environ.get("ZONE_CAM_ROTATE", "180"))
 
 calibration_square_size = 25
 horizontal_center = camera_width // 2
@@ -35,6 +37,15 @@ red_max_2 = np.array([180, 255, 255])
 kernal = np.ones((3, 3), np.uint8)
 
 timer = Timer()
+
+def rotate_frame(frame):
+    if ZONE_CAM_ROTATE == 180:
+        return cv2.rotate(frame, cv2.ROTATE_180)
+    if ZONE_CAM_ROTATE == 90:
+        return cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+    if ZONE_CAM_ROTATE == 270:
+        return cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    return frame
 
 
 def save_image(image):
@@ -137,6 +148,7 @@ def zone_cam_loop():
                 continue
         else:
             raw_capture = camera.capture_array()
+        raw_capture = rotate_frame(raw_capture)
         raw_capture = raw_capture[crop_height:, :]
         cv2_img = cv2.cvtColor(raw_capture, cv2.COLOR_RGBA2BGR)
 
