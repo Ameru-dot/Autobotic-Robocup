@@ -10,6 +10,7 @@ from ultralytics import YOLO
 
 from Managers import Timer
 from mp_manager import *
+from rdk_camera import RDKCamera, RDK_AVAILABLE
 
 debug_mode = False
 

@@ -9,6 +9,7 @@ from ultralytics.utils.plotting import colors
 
 from Managers import Timer
 from mp_manager import *
+from rdk_camera import RDKCamera, RDK_AVAILABLE
 
 camera_width = 640
 camera_height = 480
@@ -129,7 +130,13 @@ def zone_cam_loop():
 
     update_color_values()
     while not terminate.value:
-        raw_capture = camera.capture_array()
+        if use_rdk:
+            raw_capture = camera.read()
+            if raw_capture is None:
+                time.sleep(0.005)
+                continue
+        else:
+            raw_capture = camera.capture_array()
         raw_capture = raw_capture[crop_height:, :]
         cv2_img = cv2.cvtColor(raw_capture, cv2.COLOR_RGBA2BGR)
 
