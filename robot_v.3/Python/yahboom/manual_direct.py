@@ -1,8 +1,8 @@
 """
 Manual keyboard control (direct motor control).
-- W/S: forward/backward (vy)
-- A/D: strafe left/right (vx)
-- Q/E: rotate left/right (omega)
+- W/S: forward/backward
+- A/D: turn left/right
+- Q/E: fine turn left/right
 - Space: stop
 - Esc/quit: exit
 
@@ -10,19 +10,14 @@ This version sends motor speeds directly to Yahboom via motor.py
 (no control.py / motor_serial.py required).
 """
 
-import math
 import os
+
 import pygame
 import motor
 
-# Tunable speeds
-BASE_SPEED = 0.6   # linear command 0..1
-ROT_SPEED = 0.6    # rotation command 0..1
-SPEED_MAX = 700    # motor command magnitude (Yahboom: -1000..1000)
-
-# Omni geometry (same as control.py)
-WHEEL_ANGLES_DEG = {"fl": 45, "fr": -45, "bl": 135, "br": -135}
-ROBOT_RADIUS = 0.12
+# Tunable speeds (Yahboom range: -1000..1000)
+BASE_SPEED = 650
+TURN_SPEED = 550
 
 # Keep direct manual mapping consistent with motor_serial.py / main control:
 # logical wheels -> Yahboom M1..M4
@@ -34,16 +29,6 @@ MOTOR_INVERT = {
     "br": os.environ.get("INV_BR", "0") == "1",
 }
 
-def mix_omni(vx: float, vy: float, omega: float):
-    ang = {k: math.radians(v) for k, v in WHEEL_ANGLES_DEG.items()}
-    raw = {
-        "fl": -math.sin(ang["fl"]) * vx + math.cos(ang["fl"]) * vy + ROBOT_RADIUS * omega,
-        "fr": -math.sin(ang["fr"]) * vx + math.cos(ang["fr"]) * vy + ROBOT_RADIUS * omega,
-        "bl": -math.sin(ang["bl"]) * vx + math.cos(ang["bl"]) * vy + ROBOT_RADIUS * omega,
-        "br": -math.sin(ang["br"]) * vx + math.cos(ang["br"]) * vy + ROBOT_RADIUS * omega,
-    }
-    max_mag = max(1.0, max(abs(v) for v in raw.values()))
-    return {k: v / max_mag for k, v in raw.items()}
 
 def send_wheels(fl: int, fr: int, bl: int, br: int):
     values = {"fl": fl, "fr": fr, "bl": bl, "br": br}
@@ -55,17 +40,17 @@ def send_wheels(fl: int, fr: int, bl: int, br: int):
         ordered.append(val)
     motor.control_speed(*ordered)
 
+
 def main():
     pygame.init()
-    screen = pygame.display.set_mode((320, 200))
+    pygame.display.set_mode((320, 200))
     pygame.display.set_caption("Manual Control (Direct)")
     clock = pygame.time.Clock()
 
     running = True
     while running:
-        vx = 0.0
-        vy = 0.0
-        omega = 0.0
+        left_cmd = 0
+        right_cmd = 0
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -77,26 +62,35 @@ def main():
                     send_wheels(0, 0, 0, 0)
 
         keys = pygame.key.get_pressed()
+
         if keys[pygame.K_w]:
-            vy += BASE_SPEED
-        if keys[pygame.K_s]:
-            vy -= BASE_SPEED
+            left_cmd += BASE_SPEED
+            right_cmd += BASE_SPEED
+        elif keys[pygame.K_s]:
+            left_cmd -= BASE_SPEED
+            right_cmd -= BASE_SPEED
+
+        # A: turn left, D: turn right
         if keys[pygame.K_a]:
-            vx -= BASE_SPEED
-        if keys[pygame.K_d]:
-            vx += BASE_SPEED
+            left_cmd -= TURN_SPEED
+            right_cmd += TURN_SPEED
+        elif keys[pygame.K_d]:
+            left_cmd += TURN_SPEED
+            right_cmd -= TURN_SPEED
+
+        # Optional fine turn with Q/E
         if keys[pygame.K_q]:
-            omega += ROT_SPEED
-        if keys[pygame.K_e]:
-            omega -= ROT_SPEED
+            left_cmd -= TURN_SPEED // 2
+            right_cmd += TURN_SPEED // 2
+        elif keys[pygame.K_e]:
+            left_cmd += TURN_SPEED // 2
+            right_cmd -= TURN_SPEED // 2
 
-        speeds = mix_omni(vx, vy, omega)
-        fl = int(SPEED_MAX * speeds["fl"])
-        fr = int(SPEED_MAX * speeds["fr"])
-        bl = int(SPEED_MAX * speeds["bl"])
-        br = int(SPEED_MAX * speeds["br"])
-        send_wheels(fl, fr, bl, br)
+        left_cmd = max(-1000, min(1000, left_cmd))
+        right_cmd = max(-1000, min(1000, right_cmd))
 
+        # left wheels: fl/bl, right wheels: fr/br
+        send_wheels(left_cmd, right_cmd, left_cmd, right_cmd)
         clock.tick(30)
 
     send_wheels(0, 0, 0, 0)
