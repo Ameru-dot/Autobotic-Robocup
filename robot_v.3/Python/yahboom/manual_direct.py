@@ -1,4 +1,4 @@
-﻿"""
+"""
 Manual keyboard control (direct motor control).
 - W/S: forward/backward (vy)
 - A/D: strafe left/right (vx)
@@ -11,6 +11,7 @@ This version sends motor speeds directly to Yahboom via motor.py
 """
 
 import math
+import os
 import pygame
 import motor
 
@@ -23,6 +24,15 @@ SPEED_MAX = 700    # motor command magnitude (Yahboom: -1000..1000)
 WHEEL_ANGLES_DEG = {"fl": 45, "fr": -45, "bl": 135, "br": -135}
 ROBOT_RADIUS = 0.12
 
+# Keep direct manual mapping consistent with motor_serial.py / main control:
+# logical wheels -> Yahboom M1..M4
+MOTOR_ORDER = ("fl", "bl", "fr", "br")
+MOTOR_INVERT = {
+    "fl": os.environ.get("INV_FL", "0") == "1",
+    "fr": os.environ.get("INV_FR", "0") == "1",
+    "bl": os.environ.get("INV_BL", "0") == "1",
+    "br": os.environ.get("INV_BR", "0") == "1",
+}
 
 def mix_omni(vx: float, vy: float, omega: float):
     ang = {k: math.radians(v) for k, v in WHEEL_ANGLES_DEG.items()}
@@ -35,6 +45,15 @@ def mix_omni(vx: float, vy: float, omega: float):
     max_mag = max(1.0, max(abs(v) for v in raw.values()))
     return {k: v / max_mag for k, v in raw.items()}
 
+def send_wheels(fl: int, fr: int, bl: int, br: int):
+    values = {"fl": fl, "fr": fr, "bl": bl, "br": br}
+    ordered = []
+    for key in MOTOR_ORDER:
+        val = values[key]
+        if MOTOR_INVERT.get(key, False):
+            val = -val
+        ordered.append(val)
+    motor.control_speed(*ordered)
 
 def main():
     pygame.init()
@@ -55,7 +74,7 @@ def main():
                 if event.key == pygame.K_ESCAPE:
                     running = False
                 if event.key == pygame.K_SPACE:
-                    motor.control_speed(0, 0, 0, 0)
+                    send_wheels(0, 0, 0, 0)
 
         keys = pygame.key.get_pressed()
         if keys[pygame.K_w]:
@@ -76,11 +95,11 @@ def main():
         fr = int(SPEED_MAX * speeds["fr"])
         bl = int(SPEED_MAX * speeds["bl"])
         br = int(SPEED_MAX * speeds["br"])
-        motor.control_speed(fl, fr, bl, br)
+        send_wheels(fl, fr, bl, br)
 
         clock.tick(30)
 
-    motor.control_speed(0, 0, 0, 0)
+    send_wheels(0, 0, 0, 0)
     pygame.quit()
 
 
