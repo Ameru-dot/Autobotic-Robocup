@@ -44,6 +44,8 @@ motor_fr = manager.Value("i", 0)
 motor_bl = manager.Value("i", 0)
 motor_br = manager.Value("i", 0)
 motor_last_set = manager.Value("d", 0.0)
+# One-shot brake pulse request (ms) used by control->motor_serial.
+turn_brake_ms = manager.Value("i", 0)
 
 # Status text
 status = manager.Value("s", "Idle")
@@ -163,3 +165,4 @@ def find_average_color(image):
     avg_color_per_row = np.average(image, axis=0)
     avg_color = np.average(avg_color_per_row, axis=0)
     return avg_color
+

@@ -1,4 +1,5 @@
 import math
+import os
 import time
 
 from mp_manager import (
@@ -36,6 +37,7 @@ from mp_manager import (
     alive_count,
     dead_count,
     zone_status,
+    turn_brake_ms,
 )
 
 # Motion tuning
@@ -80,6 +82,7 @@ TURN_USE_IMU = True
 TURN_ANGLE_DEG = 90.0
 TURN_IMU_TOL = 8.0
 IMU_YAW_SIGN = 1.0
+TURN_BRAKE_PULSE_MS = max(0, int(os.environ.get("TURN_BRAKE_PULSE_MS", "30")))
 
 # Gap detection
 GAP_LOST_TIME = 0.4
@@ -179,6 +182,7 @@ def control_loop():
                     last_turn_dir = turn_mode
 
             if turn_mode is not None:
+                turn_done = False
                 if now < turn_forward_end:
                     omega = 0.0
                     vx = 0.0
@@ -205,11 +209,20 @@ def control_loop():
 
                     if (now - turn_start) > TURN_MIN_TIME:
                         if imu_done:
-                            turn_mode = None
+                            turn_done = True
                         elif line_found.value and abs(line_error_x.value) < TURN_REACQUIRE_ERR:
-                            turn_mode = None
+                            turn_done = True
                     if (now - turn_start) > TURN_MAX_TIME:
-                        turn_mode = None
+                        turn_done = True
+
+                if turn_done:
+                    turn_mode = None
+                    if TURN_BRAKE_PULSE_MS > 0:
+                        turn_brake_ms.value = TURN_BRAKE_PULSE_MS
+                    set_motor_targets(0, 0, 0, 0)
+                    time.sleep(0.02)
+                    continue
+
                 status.value = f"Turn {turn_mode}"
                 speeds = mix_omni(vx, vy, omega)
                 fl = int(255 * speeds["fl"])
@@ -341,6 +354,8 @@ def control_loop():
                     if time.time() > turn_end_time:
                         zone_state = "dump_back"
                         back_end_time = time.time() + BACK_TIME
+                        if TURN_BRAKE_PULSE_MS > 0:
+                            turn_brake_ms.value = TURN_BRAKE_PULSE_MS
 
                 elif zone_state == "dump_back":
                     omega = 0.0

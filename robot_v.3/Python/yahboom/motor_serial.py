@@ -1,7 +1,7 @@
 ﻿import time
 
 import motor
-from mp_manager import motor_fl, motor_fr, motor_bl, motor_br, terminate
+from mp_manager import motor_fl, motor_fr, motor_bl, motor_br, terminate, turn_brake_ms
 
 MOTOR_TYPE = 2
 UPLOAD_DATA = 1
@@ -33,6 +33,18 @@ def init_driver():
         pass
 
 
+
+
+def brake(pulse_ms: int = 30):
+    pulse_ms = max(0, int(pulse_ms))
+    try:
+        motor.control_pwm(0, 0, 0, 0)
+        if pulse_ms > 0:
+            time.sleep(pulse_ms / 1000.0)
+        motor.control_speed(0, 0, 0, 0)
+    except Exception:
+        pass
+
 def motor_loop():
     init_driver()
     last_sent = (0, 0, 0, 0)
@@ -42,6 +54,14 @@ def motor_loop():
         desired = (motor_fl.value, motor_fr.value, motor_bl.value, motor_br.value)
         changed = desired != last_sent
         stale = (now - last_send_time) > MOTOR_PERIOD
+
+        pulse_ms = int(turn_brake_ms.value)
+        if pulse_ms > 0:
+            turn_brake_ms.value = 0
+            brake(pulse_ms)
+            last_sent = (0, 0, 0, 0)
+            last_send_time = time.time()
+            continue
 
         if changed or stale:
             values = {"fl": desired[0], "fr": desired[1], "bl": desired[2], "br": desired[3]}
