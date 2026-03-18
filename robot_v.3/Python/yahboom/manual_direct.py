@@ -19,6 +19,12 @@ import motor
 BASE_SPEED = 650
 TURN_SPEED = 550
 
+# Runtime toggles to fix direction quickly without code edits.
+# REV_FWD=1  -> invert W/S direction
+# REV_TURN=1 -> invert A/D + Q/E direction
+REV_FWD = os.environ.get("REV_FWD", "0") == "1"
+REV_TURN = os.environ.get("REV_TURN", "0") == "1"
+
 # Keep direct manual mapping consistent with motor_serial.py / main control:
 # logical wheels -> Yahboom M1..M4
 MOTOR_ORDER = ("fl", "bl", "fr", "br")
@@ -49,8 +55,8 @@ def main():
 
     running = True
     while running:
-        left_cmd = 0
-        right_cmd = 0
+        fwd_cmd = 0
+        turn_cmd = 0
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -64,27 +70,29 @@ def main():
         keys = pygame.key.get_pressed()
 
         if keys[pygame.K_w]:
-            left_cmd += BASE_SPEED
-            right_cmd += BASE_SPEED
+            fwd_cmd += BASE_SPEED
         elif keys[pygame.K_s]:
-            left_cmd -= BASE_SPEED
-            right_cmd -= BASE_SPEED
+            fwd_cmd -= BASE_SPEED
 
         # A: turn left, D: turn right
         if keys[pygame.K_a]:
-            left_cmd -= TURN_SPEED
-            right_cmd += TURN_SPEED
+            turn_cmd -= TURN_SPEED
         elif keys[pygame.K_d]:
-            left_cmd += TURN_SPEED
-            right_cmd -= TURN_SPEED
+            turn_cmd += TURN_SPEED
 
         # Optional fine turn with Q/E
         if keys[pygame.K_q]:
-            left_cmd -= TURN_SPEED // 2
-            right_cmd += TURN_SPEED // 2
+            turn_cmd -= TURN_SPEED // 2
         elif keys[pygame.K_e]:
-            left_cmd += TURN_SPEED // 2
-            right_cmd -= TURN_SPEED // 2
+            turn_cmd += TURN_SPEED // 2
+
+        if REV_FWD:
+            fwd_cmd = -fwd_cmd
+        if REV_TURN:
+            turn_cmd = -turn_cmd
+
+        left_cmd = fwd_cmd + turn_cmd
+        right_cmd = fwd_cmd - turn_cmd
 
         left_cmd = max(-1000, min(1000, left_cmd))
         right_cmd = max(-1000, min(1000, right_cmd))
