@@ -109,6 +109,14 @@ EXIT_ANGLE_TOL = 20.0
 LIGHT_AUTO = True
 
 
+# Drive mode: "diff" for normal wheels, "omni" for mecanum/omni.
+DRIVE_MODE = os.environ.get("DRIVE_MODE", "diff").strip().lower()
+if DRIVE_MODE not in ("diff", "omni"):
+    DRIVE_MODE = "diff"
+# In differential mode, use lateral command as extra turning term.
+VX_AS_TURN_GAIN = float(os.environ.get("VX_AS_TURN_GAIN", "0.9"))
+
+
 def mix_omni(vx: float, vy: float, omega: float):
     ang = {k: math.radians(v) for k, v in WHEEL_ANGLES_DEG.items()}
     raw = {
@@ -119,6 +127,23 @@ def mix_omni(vx: float, vy: float, omega: float):
     }
     max_mag = max(1.0, max(abs(v) for v in raw.values()))
     return {k: v / max_mag for k, v in raw.items()}
+
+
+def mix_diff(vx: float, vy: float, omega: float):
+    # Differential drive: left/right track speeds.
+    turn = omega + VX_AS_TURN_GAIN * vx
+    left = vy + turn
+    right = vy - turn
+    max_mag = max(1.0, abs(left), abs(right))
+    left /= max_mag
+    right /= max_mag
+    return {"fl": left, "bl": left, "fr": right, "br": right}
+
+
+def mix_drive(vx: float, vy: float, omega: float):
+    if DRIVE_MODE == "omni":
+        return mix_omni(vx, vy, omega)
+    return mix_diff(vx, vy, omega)
 
 
 def control_loop():
@@ -224,7 +249,7 @@ def control_loop():
                     continue
 
                 status.value = f"Turn {turn_mode}"
-                speeds = mix_omni(vx, vy, omega)
+                speeds = mix_drive(vx, vy, omega)
                 fl = int(255 * speeds["fl"])
                 fr = int(255 * speeds["fr"])
                 bl = int(255 * speeds["bl"])
@@ -400,7 +425,7 @@ def control_loop():
             vy *= 0.5
             status.value += " (IMU stale)"
 
-        speeds = mix_omni(vx, vy, omega)
+        speeds = mix_drive(vx, vy, omega)
         fl = int(255 * speeds["fl"])
         fr = int(255 * speeds["fr"])
         bl = int(255 * speeds["bl"])
