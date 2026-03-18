@@ -11,6 +11,7 @@ This version sends motor speeds directly to Yahboom via motor.py
 """
 
 import os
+import time
 
 import pygame
 import motor
@@ -24,6 +25,8 @@ TURN_SPEED = 550
 # REV_TURN=1 -> invert A/D + Q/E direction
 REV_FWD = os.environ.get("REV_FWD", "0") == "1"
 REV_TURN = os.environ.get("REV_TURN", "0") == "1"
+BRAKE_PULSE_MS = max(0, int(os.environ.get("BRAKE_PULSE_MS", "30")))
+BRAKE_ON_TURN_RELEASE = os.environ.get("BRAKE_ON_TURN_RELEASE", "1") == "1"
 
 # Keep direct manual mapping consistent with motor_serial.py / main control:
 # logical wheels -> Yahboom M1..M4
@@ -47,6 +50,15 @@ def send_wheels(fl: int, fr: int, bl: int, br: int):
     motor.control_speed(*ordered)
 
 
+
+def brake(pulse_ms: int = 30):
+    pulse_ms = max(0, int(pulse_ms))
+    motor.control_pwm(0, 0, 0, 0)
+    if pulse_ms > 0:
+        time.sleep(pulse_ms / 1000.0)
+    motor.control_speed(0, 0, 0, 0)
+
+
 def main():
     pygame.init()
     pygame.display.set_mode((320, 200))
@@ -54,6 +66,7 @@ def main():
     clock = pygame.time.Clock()
 
     running = True
+    prev_turn_active = False
     while running:
         fwd_cmd = 0
         turn_cmd = 0
@@ -85,6 +98,16 @@ def main():
             turn_cmd -= TURN_SPEED // 2
         elif keys[pygame.K_e]:
             turn_cmd += TURN_SPEED // 2
+
+        turn_active = any((
+            keys[pygame.K_a],
+            keys[pygame.K_d],
+            keys[pygame.K_q],
+            keys[pygame.K_e],
+        ))
+        if BRAKE_ON_TURN_RELEASE and prev_turn_active and not turn_active:
+            brake(BRAKE_PULSE_MS)
+        prev_turn_active = turn_active
 
         if REV_FWD:
             fwd_cmd = -fwd_cmd
