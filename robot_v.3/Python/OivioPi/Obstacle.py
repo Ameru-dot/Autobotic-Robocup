@@ -13,8 +13,8 @@ RIGHT_MOTOR_FORWARD_PIN = 6
 RIGHT_MOTOR_BACKWARD_PIN = 5
 
 # Ultrasonic pins (HC-SR04 style)
-US_TRIG_PIN = int(os.environ.get("US_TRIG_PIN", "23"))
-US_ECHO_PIN = int(os.environ.get("US_ECHO_PIN", "24"))
+US_TRIG_PIN = int(os.environ.get("US_TRIG_PIN", "26"))
+US_ECHO_PIN = int(os.environ.get("US_ECHO_PIN", "27"))
 US_OBSTACLE_CM = float(os.environ.get("US_OBSTACLE_CM", "18.0"))
 US_MAX_DISTANCE_M = float(os.environ.get("US_MAX_DISTANCE_M", "2.0"))
 US_QUEUE_LEN = int(os.environ.get("US_QUEUE_LEN", "3"))
@@ -346,3 +346,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
