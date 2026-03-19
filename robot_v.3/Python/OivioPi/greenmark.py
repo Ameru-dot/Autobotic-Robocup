@@ -76,7 +76,7 @@ def _clean_mask(mask):
 
 
 def detect_green_positions(frame):
-    """Return ROI, mask and marker x-positions in ROI coordinates."""
+    """Return ROI, mask, marker x-positions and valid contours in ROI coordinates."""
     height = frame.shape[0]
     roi_top = int(height * ROI_TOP_RATIO)
     roi = frame[roi_top:, :]
@@ -86,6 +86,7 @@ def detect_green_positions(frame):
     green_mask = _clean_mask(green_mask)
 
     positions_x = []
+    valid_contours = []
     contours, _ = cv2.findContours(green_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     for cnt in contours:
         if cv2.contourArea(cnt) < GREEN_MIN_CONTOUR_AREA:
@@ -95,8 +96,9 @@ def detect_green_positions(frame):
             continue
         gx = int(m["m10"] / m["m00"])
         positions_x.append(gx)
+        valid_contours.append(cnt)
 
-    return roi_top, green_mask, positions_x
+    return roi_top, green_mask, positions_x, valid_contours
 
 
 def decide_action(green_positions, center_x):
@@ -189,7 +191,7 @@ def main():
 
             frame = cv2.resize(frame, (FRAME_WIDTH, FRAME_HEIGHT))
             now = monotonic()
-            roi_top, green_mask, green_positions = detect_green_positions(frame)
+            roi_top, green_mask, green_positions, green_contours = detect_green_positions(frame)
             frame_mid_x = frame.shape[1] // 2
             status = "IDLE"
 
@@ -218,6 +220,11 @@ def main():
             cv2.line(
                 frame, (frame_mid_x, roi_top), (frame_mid_x, frame.shape[0]), (255, 255, 0), 2
             )
+
+            for cnt in green_contours:
+                cnt_shifted = cnt.copy()
+                cnt_shifted[:, 0, 1] += roi_top
+                cv2.drawContours(frame, [cnt_shifted], -1, (0, 255, 0), 2)
 
             for gx in green_positions:
                 cv2.circle(frame, (gx, roi_top + 12), 6, (0, 255, 0), -1)
