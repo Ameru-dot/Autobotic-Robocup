@@ -68,6 +68,32 @@ multiple_bottom_side = camera_x / 2
 timer = Timer()
 
 
+def _clip01(value):
+    return max(0.0, min(1.0, float(value)))
+
+
+def _clip11(value):
+    return max(-1.0, min(1.0, float(value)))
+
+
+def _sync_control_vars_follow_line():
+    # Bridge camera outputs to control.py expected variables.
+    line_found.value = bool(line_detected.value)
+    line_error_x.value = _clip11(float(line_angle.value) / 180.0)
+    turn_direction.value = str(turn_dir.value)
+    silver_prob.value = _clip01(silver_value.value)
+    red_line_detected.value = bool(red_detected.value)
+
+
+def _sync_control_vars_zone():
+    # Avoid stale line/silver flags while running zone objective.
+    line_found.value = bool(zone_found_black.value)
+    line_error_x.value = 0.0
+    turn_direction.value = "straight"
+    silver_prob.value = 0.0
+    # Reuse zone red target visibility as zone-exit red cue for control loop.
+    red_line_detected.value = bool(zone_found_red.value)
+
 def save_image(image):
     if not os.path.exists("../../Ai/datasets/images_to_annotate"):
         os.mkdir("../../Ai/datasets/images_to_annotate")
@@ -1121,6 +1147,12 @@ def line_cam_loop():
 
             cv2.putText(cv2_img, str(fps), (int(camera_x * 0.92), int(camera_y * 0.05)), cv2.FONT_HERSHEY_DUPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
 
+            # Compatibility bridge for control.py variable names.
+            if calibrate_color_status.value == "none":
+                if objective.value == "follow_line":
+                    _sync_control_vars_follow_line()
+                elif objective.value == "zone":
+                    _sync_control_vars_zone()
             # Checking the shared memory buffer size of the image
             # print(cv2_img.size)
 

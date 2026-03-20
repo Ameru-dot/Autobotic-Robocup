@@ -44,6 +44,11 @@ kernal = np.ones((3, 3), np.uint8)
 
 timer = Timer()
 
+
+def _corner_to_found_err(corner_deg):
+    if int(corner_deg) == -181:
+        return False, 0.0
+    return True, max(-1.0, min(1.0, float(corner_deg) / 180.0))
 def rotate_frame(frame):
     if ZONE_CAM_ROTATE == 180:
         return cv2.rotate(frame, cv2.ROTATE_180)
@@ -188,6 +193,11 @@ def zone_cam_loop():
 
             if calibrate_color_status.value == "none":
                 if objective.value == "zone":
+                    # Reset compat drop-alignment flags every frame to avoid stale values.
+                    zone_green_found.value = False
+                    zone_green_error_x.value = 0.0
+                    zone_red_found.value = False
+                    zone_red_error_x.value = 0.0
                     if check_similarity_counter >= check_similarity_limit:
                         grey_image = cv2.cvtColor(cv2_img, cv2.COLOR_BGR2GRAY)
                         zone_similarity.value = structural_similarity(grey_image, last_image)
@@ -247,10 +257,12 @@ def zone_cam_loop():
                     elif zone_status.value == "deposit_green":
                         contours_green = get_green_contours(cv2_img)
                         corner_distance.value, corner_size.value = check_contours(contours_green, cv2_img, (0, 0, 255))
+                        zone_green_found.value, zone_green_error_x.value = _corner_to_found_err(corner_distance.value)
 
                     elif zone_status.value == "deposit_red":
                         contours_red = get_red_contours(cv2_img)
                         corner_distance.value, corner_size.value = check_contours(contours_red, cv2_img, (0, 255, 0))
+                        zone_red_found.value, zone_red_error_x.value = _corner_to_found_err(corner_distance.value)
 
 
             elif calibrate_color_status.value == "calibrate" and (calibration_color.value == "z-r" or calibration_color.value == "z-g"):
