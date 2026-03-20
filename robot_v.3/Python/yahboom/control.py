@@ -41,7 +41,7 @@ from mp_manager import (
 )
 
 # Motion tuning
-KP_TURN = 75         # steering gain (scaled later)
+KP_TURN = 80         # steering gain (scaled later)
 VY_CMD = 0.28        # forward component 0..1
 VX_CMD = 0.0         # lateral component
 LOST_LINE_OMEGA = 0  # yaw when line lost (set small value to spin)
@@ -66,14 +66,17 @@ IR_BACK_DROP = 700
 TURN180_TIME = 1.0
 BACK_TIME = 1.0
 # Speed scaling on turns
-TURN_SPEED_GAIN = 0.70
+TURN_SPEED_GAIN = 0.85
 MIN_SPEED_SCALE = 0.25
-OMEGA_MAX_FOLLOW = 0.09
+OMEGA_MAX_FOLLOW = 0.10
+OMEGA_MAX_RECOVER = 0.18
+ERR_RECOVER_THRESH = 0.22
+KP_TURN_RECOVER = 125
 OMEGA_MAX_SEARCH = 0.12
 TURN_BIAS_MAG = 2.0 / 255.0
-LINE_ERR_FILTER_ALPHA = 0.15
-LINE_ERR_DEADBAND = 0.04
-OMEGA_SLEW_PER_TICK = 0.020
+LINE_ERR_FILTER_ALPHA = 0.25
+LINE_ERR_DEADBAND = 0.02
+OMEGA_SLEW_PER_TICK = 0.040
 
 # Intersection turn handling
 TURN_FORWARD_TIME = 0.2
@@ -356,8 +359,10 @@ def control_loop():
                     elif turn_direction.value == 'turn_around':
                         turn_bias = 0.0
 
-                omega = -err_use * (KP_TURN / 255.0) + turn_bias
-                omega = max(-OMEGA_MAX_FOLLOW, min(OMEGA_MAX_FOLLOW, omega))
+                steer_gain = KP_TURN_RECOVER if abs(err_use) >= ERR_RECOVER_THRESH else KP_TURN
+                omega_limit = OMEGA_MAX_RECOVER if abs(err_use) >= ERR_RECOVER_THRESH else OMEGA_MAX_FOLLOW
+                omega = -err_use * (steer_gain / 255.0) + turn_bias
+                omega = max(-omega_limit, min(omega_limit, omega))
                 # Slew-limit steering command to reduce frame-to-frame zigzag.
                 if omega > omega_cmd_prev + OMEGA_SLEW_PER_TICK:
                     omega = omega_cmd_prev + OMEGA_SLEW_PER_TICK
@@ -371,7 +376,7 @@ def control_loop():
                 else:
                     scale = max(MIN_SPEED_SCALE, 1.0 - abs(err_use) * TURN_SPEED_GAIN)
                 vy = VY_CMD * scale
-                status.value = f'Line: err={raw_err:.2f} filt={line_err_f:.2f} scale={scale:.2f}'
+                status.value = f'Line: err={raw_err:.2f} filt={line_err_f:.2f} gain={steer_gain:.0f} scale={scale:.2f}'
                 last_line_seen = time.time()
                 hold_heading = imu_yaw.value
                 gap_mode = False
