@@ -41,7 +41,7 @@ from mp_manager import (
 )
 
 # Motion tuning
-KP_TURN = 110        # steering gain (scaled later)
+KP_TURN = 90         # steering gain (scaled later)
 VY_CMD = 0.20        # forward component 0..1
 VX_CMD = 0.0         # lateral component
 LOST_LINE_OMEGA = 0  # yaw when line lost (set small value to spin)
@@ -68,9 +68,11 @@ BACK_TIME = 1.0
 # Speed scaling on turns
 TURN_SPEED_GAIN = 0.95
 MIN_SPEED_SCALE = 0.05
-OMEGA_MAX_FOLLOW = 0.22
+OMEGA_MAX_FOLLOW = 0.14
 OMEGA_MAX_SEARCH = 0.12
-TURN_BIAS_MAG = 8.0 / 255.0
+TURN_BIAS_MAG = 4.0 / 255.0
+LINE_ERR_FILTER_ALPHA = 0.30
+LINE_ERR_DEADBAND = 0.06
 
 # Intersection turn handling
 TURN_FORWARD_TIME = 0.2
@@ -184,6 +186,7 @@ def control_loop():
     ir_right_blocked = False
     ir_left_pending = 0
     ir_right_pending = 0
+    line_err_f = 0.0
 
     while not terminate.value:
         # Calibration mode: freeze motors, set light on
@@ -338,21 +341,26 @@ def control_loop():
                     status.value = f"Blocked both -> stop (L={left_now} R={right_now})"
                 gap_mode = False
             elif line_found.value:
-                turn_bias = 0.0
-                if turn_direction.value == "left":
-                    turn_bias = TURN_BIAS_MAG
-                elif turn_direction.value == "right":
-                    turn_bias = -TURN_BIAS_MAG
-                elif turn_direction.value == "turn_around":
-                    turn_bias = 0.0  # let silver trigger handle state change if desired
+                raw_err = float(line_error_x.value)
+                line_err_f = (1.0 - LINE_ERR_FILTER_ALPHA) * line_err_f + LINE_ERR_FILTER_ALPHA * raw_err
+                err_use = 0.0 if abs(line_err_f) < LINE_ERR_DEADBAND else line_err_f
 
-                omega = -line_error_x.value * (KP_TURN / 255.0) + turn_bias
+                turn_bias = 0.0
+                if abs(err_use) < 0.15:
+                    if turn_direction.value == 'left':
+                        turn_bias = TURN_BIAS_MAG
+                    elif turn_direction.value == 'right':
+                        turn_bias = -TURN_BIAS_MAG
+                    elif turn_direction.value == 'turn_around':
+                        turn_bias = 0.0
+
+                omega = -err_use * (KP_TURN / 255.0) + turn_bias
                 omega = max(-OMEGA_MAX_FOLLOW, min(OMEGA_MAX_FOLLOW, omega))
                 vx = VX_CMD
-                # Speed scaling on turns
-                scale = max(MIN_SPEED_SCALE, 1.0 - abs(line_error_x.value) * TURN_SPEED_GAIN)
+                # Speed scaling on turns (based on filtered error)
+                scale = max(MIN_SPEED_SCALE, 1.0 - abs(err_use) * TURN_SPEED_GAIN)
                 vy = VY_CMD * scale
-                status.value = f"Line: err {line_error_x.value:.2f} scale={scale:.2f}"
+                status.value = f'Line: err={raw_err:.2f} filt={line_err_f:.2f} scale={scale:.2f}'
                 last_line_seen = time.time()
                 hold_heading = imu_yaw.value
                 gap_mode = False
