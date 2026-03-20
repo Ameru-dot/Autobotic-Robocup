@@ -66,6 +66,9 @@ red_max_2_zone = np.array([180, 255, 255])
 multiple_bottom_side = camera_x / 2
 
 timer = Timer()
+# Sign for mapping line_angle -> line_error_x used by control.py bridge.
+# Use -1 for mirrored steering, +1 for normal steering.
+LINE_ERROR_SIGN = float(os.environ.get("LINE_ERROR_SIGN", "-1.0"))
 
 
 def _clip01(value):
@@ -79,7 +82,7 @@ def _clip11(value):
 def _sync_control_vars_follow_line():
     # Bridge camera outputs to control.py expected variables.
     line_found.value = bool(line_detected.value)
-    line_error_x.value = _clip11(float(line_angle.value) / 180.0)
+    line_error_x.value = _clip11(LINE_ERROR_SIGN * float(line_angle.value) / 180.0)
     turn_direction.value = str(turn_dir.value)
     silver_prob.value = _clip01(silver_value.value)
     red_line_detected.value = bool(red_detected.value)
