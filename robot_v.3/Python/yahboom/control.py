@@ -41,8 +41,8 @@ from mp_manager import (
 )
 
 # Motion tuning
-KP_TURN = 90         # steering gain (scaled later)
-VY_CMD = 0.24        # forward component 0..1
+KP_TURN = 75         # steering gain (scaled later)
+VY_CMD = 0.28        # forward component 0..1
 VX_CMD = 0.0         # lateral component
 LOST_LINE_OMEGA = 0  # yaw when line lost (set small value to spin)
 IMU_TIMEOUT = 2.0    # seconds before we slow due to stale IMU
@@ -66,14 +66,14 @@ IR_BACK_DROP = 700
 TURN180_TIME = 1.0
 BACK_TIME = 1.0
 # Speed scaling on turns
-TURN_SPEED_GAIN = 0.95
-MIN_SPEED_SCALE = 0.05
-OMEGA_MAX_FOLLOW = 0.11
+TURN_SPEED_GAIN = 0.70
+MIN_SPEED_SCALE = 0.25
+OMEGA_MAX_FOLLOW = 0.09
 OMEGA_MAX_SEARCH = 0.12
-TURN_BIAS_MAG = 4.0 / 255.0
-LINE_ERR_FILTER_ALPHA = 0.20
-LINE_ERR_DEADBAND = 0.08
-OMEGA_SLEW_PER_TICK = 0.025
+TURN_BIAS_MAG = 2.0 / 255.0
+LINE_ERR_FILTER_ALPHA = 0.15
+LINE_ERR_DEADBAND = 0.04
+OMEGA_SLEW_PER_TICK = 0.020
 
 # Intersection turn handling
 TURN_FORWARD_TIME = 0.2
@@ -365,8 +365,11 @@ def control_loop():
                     omega = omega_cmd_prev - OMEGA_SLEW_PER_TICK
                 omega_cmd_prev = omega
                 vx = VX_CMD
-                # Speed scaling on turns (based on filtered error)
-                scale = max(MIN_SPEED_SCALE, 1.0 - abs(err_use) * TURN_SPEED_GAIN)
+                # Keep full speed on near-straight segments; reduce on larger errors.
+                if abs(err_use) < 0.10:
+                    scale = 1.0
+                else:
+                    scale = max(MIN_SPEED_SCALE, 1.0 - abs(err_use) * TURN_SPEED_GAIN)
                 vy = VY_CMD * scale
                 status.value = f'Line: err={raw_err:.2f} filt={line_err_f:.2f} scale={scale:.2f}'
                 last_line_seen = time.time()
