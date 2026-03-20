@@ -41,7 +41,7 @@ from mp_manager import (
 )
 
 # Motion tuning
-KP_TURN = 95         # steering gain (scaled later)
+KP_TURN = 110        # steering gain (scaled later)
 VY_CMD = 0.32        # forward component 0..1
 VX_CMD = 0.0         # lateral component
 LOST_LINE_OMEGA = 0  # yaw when line lost (set small value to spin)
@@ -66,17 +66,19 @@ IR_BACK_DROP = 700
 TURN180_TIME = 1.0
 BACK_TIME = 1.0
 # Speed scaling on turns
-TURN_SPEED_GAIN = 0.75
-MIN_SPEED_SCALE = 0.35
-OMEGA_MAX_FOLLOW = 0.13
-OMEGA_MAX_RECOVER = 0.24
-ERR_RECOVER_THRESH = 0.16
-KP_TURN_RECOVER = 170
+TURN_SPEED_GAIN = 0.65
+MIN_SPEED_SCALE = 0.45
+OMEGA_MAX_FOLLOW = 0.16
+OMEGA_MAX_RECOVER = 0.28
+ERR_RECOVER_THRESH = 0.20
+KP_TURN_RECOVER = 200
+STRAIGHT_BAND = 0.07
+SOFT_BAND = 0.20
 OMEGA_MAX_SEARCH = 0.12
 TURN_BIAS_MAG = 2.0 / 255.0
-LINE_ERR_FILTER_ALPHA = 0.35
-LINE_ERR_DEADBAND = 0.01
-OMEGA_SLEW_PER_TICK = 0.060
+LINE_ERR_FILTER_ALPHA = 0.32
+LINE_ERR_DEADBAND = 0.015
+OMEGA_SLEW_PER_TICK = 0.080
 
 # Intersection turn handling
 TURN_FORWARD_TIME = 0.2
@@ -359,10 +361,22 @@ def control_loop():
                     elif turn_direction.value == 'turn_around':
                         turn_bias = 0.0
 
-                steer_gain = KP_TURN_RECOVER if abs(err_use) >= ERR_RECOVER_THRESH else KP_TURN
-                omega_limit = OMEGA_MAX_RECOVER if abs(err_use) >= ERR_RECOVER_THRESH else OMEGA_MAX_FOLLOW
-                omega = -err_use * (steer_gain / 255.0) + turn_bias
-                omega = max(-omega_limit, min(omega_limit, omega))
+                abs_err = abs(err_use)
+                if abs_err < STRAIGHT_BAND:
+                    steer_mode = 'straight'
+                    steer_gain = 0.0
+                    omega = 0.0
+                elif abs_err < SOFT_BAND:
+                    steer_mode = 'soft'
+                    steer_gain = float(KP_TURN)
+                    omega = -err_use * (steer_gain / 255.0) + turn_bias
+                    omega = max(-OMEGA_MAX_FOLLOW, min(OMEGA_MAX_FOLLOW, omega))
+                else:
+                    steer_mode = 'recover'
+                    steer_gain = float(KP_TURN_RECOVER)
+                    omega = -err_use * (steer_gain / 255.0)
+                    omega = max(-OMEGA_MAX_RECOVER, min(OMEGA_MAX_RECOVER, omega))
+
                 # Slew-limit steering command to reduce frame-to-frame zigzag.
                 if omega > omega_cmd_prev + OMEGA_SLEW_PER_TICK:
                     omega = omega_cmd_prev + OMEGA_SLEW_PER_TICK
@@ -370,13 +384,15 @@ def control_loop():
                     omega = omega_cmd_prev - OMEGA_SLEW_PER_TICK
                 omega_cmd_prev = omega
                 vx = VX_CMD
-                # Keep full speed on near-straight segments; reduce on larger errors.
-                if abs(err_use) < 0.08:
+
+                if steer_mode == 'straight':
                     scale = 1.0
+                elif steer_mode == 'soft':
+                    scale = 0.95
                 else:
-                    scale = max(MIN_SPEED_SCALE, 1.0 - abs(err_use) * TURN_SPEED_GAIN)
+                    scale = max(MIN_SPEED_SCALE, 1.0 - abs_err * TURN_SPEED_GAIN)
                 vy = VY_CMD * scale
-                status.value = f'Line: err={raw_err:.2f} filt={line_err_f:.2f} gain={steer_gain:.0f} scale={scale:.2f}'
+                status.value = f'Line: err={raw_err:.2f} filt={line_err_f:.2f} mode={steer_mode} gain={steer_gain:.0f} scale={scale:.2f}'
                 last_line_seen = time.time()
                 hold_heading = imu_yaw.value
                 gap_mode = False
