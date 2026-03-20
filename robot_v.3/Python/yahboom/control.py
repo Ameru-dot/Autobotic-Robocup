@@ -100,7 +100,16 @@ WHEEL_ANGLES_DEG = {"fl": 45, "fr": -45, "bl": 135, "br": -135}
 ROBOT_RADIUS = 0.12
 
 # IR thresholds (raw ADC); adjust to your sensors
-IR_BLOCK = 60
+IR_BLOCK_ENTER = int(os.environ.get("IR_BLOCK_ENTER", "60"))
+IR_BLOCK_EXIT = int(os.environ.get("IR_BLOCK_EXIT", "90"))
+IR_DEBOUNCE_FRAMES = max(1, int(os.environ.get("IR_DEBOUNCE_FRAMES", "3")))
+
+# Side-avoid behavior in follow_line when IR is triggered.
+IR_AVOID_VY = float(os.environ.get("IR_AVOID_VY", "0.10"))
+IR_AVOID_OMEGA = float(os.environ.get("IR_AVOID_OMEGA", "0.65"))
+IR_BOTH_MODE = os.environ.get("IR_BOTH_MODE", "stop").strip().lower()  # stop|reverse
+IR_BOTH_REVERSE_VY = float(os.environ.get("IR_BOTH_REVERSE_VY", "-0.08"))
+
 SILVER_TRIGGER = 0.08  # fraction of bright pixels to treat as silver strip
 STOP_ON_RED = True     # stop when red line detected
 EXIT_ANGLE_TOL = 20.0
@@ -166,6 +175,13 @@ def control_loop():
     turn_cooldown_until = 0.0
     last_turn_dir = "right"
     turn_start_yaw = 0.0
+
+    # IR latch states with hysteresis + debounce (active-low sensors)
+    ir_left_blocked = False
+    ir_right_blocked = False
+    ir_left_pending = 0
+    ir_right_pending = 0
+
     while not terminate.value:
         # Calibration mode: freeze motors, set light on
         if calibrate_color_status.value != "none":
@@ -181,8 +197,39 @@ def control_loop():
             else:
                 light_on.value = False
 
-        # Obstacle check
-        blocked = (ir1.value < IR_BLOCK) or (ir2.value < IR_BLOCK)
+        # Obstacle check with hysteresis + debounce (active-low sensors)
+        left_now = int(ir1.value)
+        right_now = int(ir2.value)
+
+        left_wants_block = left_now < (IR_BLOCK_EXIT if ir_left_blocked else IR_BLOCK_ENTER)
+        right_wants_block = right_now < (IR_BLOCK_EXIT if ir_right_blocked else IR_BLOCK_ENTER)
+
+        if left_wants_block != ir_left_blocked:
+            ir_left_pending += 1
+            if ir_left_pending >= IR_DEBOUNCE_FRAMES:
+                ir_left_blocked = left_wants_block
+                ir_left_pending = 0
+        else:
+            ir_left_pending = 0
+
+        if right_wants_block != ir_right_blocked:
+            ir_right_pending += 1
+            if ir_right_pending >= IR_DEBOUNCE_FRAMES:
+                ir_right_blocked = right_wants_block
+                ir_right_pending = 0
+        else:
+            ir_right_pending = 0
+
+        if ir_left_blocked and ir_right_blocked:
+            obstacle_mode = "both"
+        elif ir_left_blocked:
+            obstacle_mode = "left"
+        elif ir_right_blocked:
+            obstacle_mode = "right"
+        else:
+            obstacle_mode = "none"
+
+        blocked = obstacle_mode != "none"
 
         # State machine
         if objective.value == "manual":
@@ -262,7 +309,32 @@ def control_loop():
                 time.sleep(0.02)
                 continue
 
-            if line_found.value and not blocked:
+            if obstacle_mode == "right":
+                # Obstacle on right -> avoid to left
+                omega = IR_AVOID_OMEGA
+                vx = 0.0
+                vy = IR_AVOID_VY
+                status.value = f"Avoid left (IR-R={right_now})"
+                gap_mode = False
+            elif obstacle_mode == "left":
+                # Obstacle on left -> avoid to right
+                omega = -IR_AVOID_OMEGA
+                vx = 0.0
+                vy = IR_AVOID_VY
+                status.value = f"Avoid right (IR-L={left_now})"
+                gap_mode = False
+            elif obstacle_mode == "both":
+                vx = 0.0
+                if IR_BOTH_MODE == "reverse":
+                    omega = 0.0
+                    vy = IR_BOTH_REVERSE_VY
+                    status.value = f"Blocked both -> reverse (L={left_now} R={right_now})"
+                else:
+                    omega = 0.0
+                    vy = 0.0
+                    status.value = f"Blocked both -> stop (L={left_now} R={right_now})"
+                gap_mode = False
+            elif line_found.value:
                 turn_bias = 0.0
                 if turn_direction.value == "left":
                     turn_bias = 20.0 / 255.0
@@ -288,16 +360,16 @@ def control_loop():
                     omega = LOST_LINE_OMEGA
                 vx = 0.0
                 # Gap handling: if line lost recently, keep moving forward slowly
-                if not blocked and (time.time() - last_line_seen) > GAP_LOST_TIME:
+                if (time.time() - last_line_seen) > GAP_LOST_TIME:
                     gap_mode = True
                     gap_start = last_line_seen
                 if gap_mode and (time.time() - gap_start) < GAP_MAX_TIME:
                     vy = GAP_SPEED
                     status.value = "Gap mode"
                 else:
-                    vy = 0.0 if blocked else VY_CMD * 0.2
+                    vy = VY_CMD * 0.2
                     gap_mode = False
-                    status.value = "Blocked (IR)" if blocked else "Searching line"
+                    status.value = "Searching line"
 
             # Trigger zone mode on silver prob (set in line_cam via brightness)
             if silver_prob.value > SILVER_TRIGGER:
