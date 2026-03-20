@@ -41,8 +41,8 @@ from mp_manager import (
 )
 
 # Motion tuning
-KP_TURN = 220        # steering gain (scaled later)
-VY_CMD = 0.35        # forward component 0..1
+KP_TURN = 180        # steering gain (scaled later)
+VY_CMD = 0.20        # forward component 0..1
 VX_CMD = 0.0         # lateral component
 LOST_LINE_OMEGA = 0  # yaw when line lost (set small value to spin)
 IMU_TIMEOUT = 2.0    # seconds before we slow due to stale IMU
@@ -67,7 +67,7 @@ TURN180_TIME = 1.0
 BACK_TIME = 1.0
 # Speed scaling on turns
 TURN_SPEED_GAIN = 0.7
-MIN_SPEED_SCALE = 0.25
+MIN_SPEED_SCALE = 0.10
 
 # Intersection turn handling
 TURN_FORWARD_TIME = 0.2
@@ -87,7 +87,7 @@ TURN_BRAKE_PULSE_MS = max(0, int(os.environ.get("TURN_BRAKE_PULSE_MS", "30")))
 # Gap detection
 GAP_LOST_TIME = 0.4
 GAP_MAX_TIME = 1.2
-GAP_SPEED = 0.18
+GAP_SPEED = 0.10
 
 # Ramp detection (using pitch)
 RAMP_UP_PITCH = 10.0
