@@ -41,14 +41,14 @@ from mp_manager import (
 )
 
 # Motion tuning
-KP_TURN = 180        # steering gain (scaled later)
+KP_TURN = 110        # steering gain (scaled later)
 VY_CMD = 0.20        # forward component 0..1
 VX_CMD = 0.0         # lateral component
 LOST_LINE_OMEGA = 0  # yaw when line lost (set small value to spin)
 IMU_TIMEOUT = 2.0    # seconds before we slow due to stale IMU
 
 # Heading hold when line lost
-YAW_HOLD_GAIN = 0.8  # adjust how aggressively to return to last heading
+YAW_HOLD_GAIN = 0.35  # adjust how aggressively to return to last heading
 
 # Zone/ball tuning
 KP_BALL = 140        # steering gain when centering on ball
@@ -66,17 +66,20 @@ IR_BACK_DROP = 700
 TURN180_TIME = 1.0
 BACK_TIME = 1.0
 # Speed scaling on turns
-TURN_SPEED_GAIN = 0.7
-MIN_SPEED_SCALE = 0.10
+TURN_SPEED_GAIN = 0.95
+MIN_SPEED_SCALE = 0.05
+OMEGA_MAX_FOLLOW = 0.22
+OMEGA_MAX_SEARCH = 0.12
+TURN_BIAS_MAG = 8.0 / 255.0
 
 # Intersection turn handling
 TURN_FORWARD_TIME = 0.2
 TURN_MIN_TIME = 0.25
 TURN_MAX_TIME = 1.6
 TURN_COOLDOWN = 0.8
-TURN_FORWARD_SPEED = 0.2
-TURN_OMEGA = 0.8
-TURN_AROUND_OMEGA = 0.9
+TURN_FORWARD_SPEED = 0.12
+TURN_OMEGA = 0.55
+TURN_AROUND_OMEGA = 0.65
 TURN_REACQUIRE_ERR = 0.2
 TURN_USE_IMU = True
 TURN_ANGLE_DEG = 90.0
@@ -86,8 +89,8 @@ TURN_BRAKE_PULSE_MS = max(0, int(os.environ.get("TURN_BRAKE_PULSE_MS", "30")))
 
 # Gap detection
 GAP_LOST_TIME = 0.4
-GAP_MAX_TIME = 1.2
-GAP_SPEED = 0.10
+GAP_MAX_TIME = 0.7
+GAP_SPEED = 0.05
 
 # Ramp detection (using pitch)
 RAMP_UP_PITCH = 10.0
@@ -337,13 +340,14 @@ def control_loop():
             elif line_found.value:
                 turn_bias = 0.0
                 if turn_direction.value == "left":
-                    turn_bias = 20.0 / 255.0
+                    turn_bias = TURN_BIAS_MAG
                 elif turn_direction.value == "right":
-                    turn_bias = -20.0 / 255.0
+                    turn_bias = -TURN_BIAS_MAG
                 elif turn_direction.value == "turn_around":
                     turn_bias = 0.0  # let silver trigger handle state change if desired
 
                 omega = -line_error_x.value * (KP_TURN / 255.0) + turn_bias
+                omega = max(-OMEGA_MAX_FOLLOW, min(OMEGA_MAX_FOLLOW, omega))
                 vx = VX_CMD
                 # Speed scaling on turns
                 scale = max(MIN_SPEED_SCALE, 1.0 - abs(line_error_x.value) * TURN_SPEED_GAIN)
@@ -356,8 +360,9 @@ def control_loop():
                 if (time.time() - imu_last_ts.value) < IMU_TIMEOUT:
                     yaw_err = (hold_heading - imu_yaw.value + 540.0) % 360.0 - 180.0
                     omega = (yaw_err / 90.0) * YAW_HOLD_GAIN
+                    omega = max(-OMEGA_MAX_SEARCH, min(OMEGA_MAX_SEARCH, omega))
                 else:
-                    omega = LOST_LINE_OMEGA
+                    omega = max(-OMEGA_MAX_SEARCH, min(OMEGA_MAX_SEARCH, LOST_LINE_OMEGA))
                 vx = 0.0
                 # Gap handling: if line lost recently, keep moving forward slowly
                 if (time.time() - last_line_seen) > GAP_LOST_TIME:
