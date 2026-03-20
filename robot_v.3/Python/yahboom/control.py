@@ -100,7 +100,7 @@ WHEEL_ANGLES_DEG = {"fl": 45, "fr": -45, "bl": 135, "br": -135}
 ROBOT_RADIUS = 0.12
 
 # IR thresholds (raw ADC); adjust to your sensors
-IR_BLOCK = 1500
+IR_BLOCK = 60
 SILVER_TRIGGER = 0.08  # fraction of bright pixels to treat as silver strip
 STOP_ON_RED = True     # stop when red line detected
 EXIT_ANGLE_TOL = 20.0
@@ -182,7 +182,7 @@ def control_loop():
                 light_on.value = False
 
         # Obstacle check
-        blocked = (ir1.value > IR_BLOCK) or (ir2.value > IR_BLOCK)
+        blocked = (ir1.value < IR_BLOCK) or (ir2.value < IR_BLOCK)
 
         # State machine
         if objective.value == "manual":
