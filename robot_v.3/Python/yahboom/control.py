@@ -42,7 +42,7 @@ from mp_manager import (
 
 # Motion tuning
 KP_TURN = 90         # steering gain (scaled later)
-VY_CMD = 0.20        # forward component 0..1
+VY_CMD = 0.24        # forward component 0..1
 VX_CMD = 0.0         # lateral component
 LOST_LINE_OMEGA = 0  # yaw when line lost (set small value to spin)
 IMU_TIMEOUT = 2.0    # seconds before we slow due to stale IMU
@@ -68,11 +68,12 @@ BACK_TIME = 1.0
 # Speed scaling on turns
 TURN_SPEED_GAIN = 0.95
 MIN_SPEED_SCALE = 0.05
-OMEGA_MAX_FOLLOW = 0.14
+OMEGA_MAX_FOLLOW = 0.11
 OMEGA_MAX_SEARCH = 0.12
 TURN_BIAS_MAG = 4.0 / 255.0
-LINE_ERR_FILTER_ALPHA = 0.30
-LINE_ERR_DEADBAND = 0.06
+LINE_ERR_FILTER_ALPHA = 0.20
+LINE_ERR_DEADBAND = 0.08
+OMEGA_SLEW_PER_TICK = 0.025
 
 # Intersection turn handling
 TURN_FORWARD_TIME = 0.2
@@ -187,6 +188,7 @@ def control_loop():
     ir_left_pending = 0
     ir_right_pending = 0
     line_err_f = 0.0
+    omega_cmd_prev = 0.0
 
     while not terminate.value:
         # Calibration mode: freeze motors, set light on
@@ -356,6 +358,12 @@ def control_loop():
 
                 omega = -err_use * (KP_TURN / 255.0) + turn_bias
                 omega = max(-OMEGA_MAX_FOLLOW, min(OMEGA_MAX_FOLLOW, omega))
+                # Slew-limit steering command to reduce frame-to-frame zigzag.
+                if omega > omega_cmd_prev + OMEGA_SLEW_PER_TICK:
+                    omega = omega_cmd_prev + OMEGA_SLEW_PER_TICK
+                elif omega < omega_cmd_prev - OMEGA_SLEW_PER_TICK:
+                    omega = omega_cmd_prev - OMEGA_SLEW_PER_TICK
+                omega_cmd_prev = omega
                 vx = VX_CMD
                 # Speed scaling on turns (based on filtered error)
                 scale = max(MIN_SPEED_SCALE, 1.0 - abs(err_use) * TURN_SPEED_GAIN)
