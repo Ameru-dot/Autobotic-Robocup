@@ -17,7 +17,7 @@ from mp_manager import (
 )
 
 # Serial port settings
-SERIAL_PORT = "/dev/ttyACM0"
+SERIAL_PORT = "/dev/ttyUSB0"
 BAUD = 115200
 
 

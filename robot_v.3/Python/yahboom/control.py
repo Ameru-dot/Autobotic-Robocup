@@ -100,7 +100,7 @@ WHEEL_ANGLES_DEG = {"fl": 45, "fr": -45, "bl": 135, "br": -135}
 ROBOT_RADIUS = 0.12
 
 # IR thresholds (raw ADC); adjust to your sensors
-IR_BLOCK = 900
+IR_BLOCK = 1500
 SILVER_TRIGGER = 0.08  # fraction of bright pixels to treat as silver strip
 STOP_ON_RED = True     # stop when red line detected
 EXIT_ANGLE_TOL = 20.0
@@ -115,6 +115,8 @@ if DRIVE_MODE not in ("diff", "omni"):
     DRIVE_MODE = "diff"
 # In differential mode, use lateral command as extra turning term.
 VX_AS_TURN_GAIN = float(os.environ.get("VX_AS_TURN_GAIN", "0.9"))
+# Reverse only forward/backward translation while keeping turn direction.
+REV_FWD = os.environ.get("REV_FWD", "1") == "1"
 
 
 def mix_omni(vx: float, vy: float, omega: float):
@@ -141,6 +143,8 @@ def mix_diff(vx: float, vy: float, omega: float):
 
 
 def mix_drive(vx: float, vy: float, omega: float):
+    if REV_FWD:
+        vy = -vy
     if DRIVE_MODE == "omni":
         return mix_omni(vx, vy, omega)
     return mix_diff(vx, vy, omega)
