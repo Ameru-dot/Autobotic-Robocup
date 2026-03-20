@@ -41,7 +41,7 @@ from mp_manager import (
 )
 
 # Motion tuning
-KP_TURN = 110        # steering gain (scaled later)
+KP_TURN = 95         # steering gain (scaled later)
 VY_CMD = 0.32        # forward component 0..1
 VX_CMD = 0.0         # lateral component
 LOST_LINE_OMEGA = 0  # yaw when line lost (set small value to spin)
@@ -68,17 +68,18 @@ BACK_TIME = 1.0
 # Speed scaling on turns
 TURN_SPEED_GAIN = 0.65
 MIN_SPEED_SCALE = 0.45
-OMEGA_MAX_FOLLOW = 0.16
+OMEGA_MAX_FOLLOW = 0.12
 OMEGA_MAX_RECOVER = 0.28
 ERR_RECOVER_THRESH = 0.20
 KP_TURN_RECOVER = 200
-STRAIGHT_BAND = 0.07
-SOFT_BAND = 0.20
+KP_TURN_SOFT = 70
+STRAIGHT_BAND = 0.12
+SOFT_BAND = 0.30
 OMEGA_MAX_SEARCH = 0.12
-TURN_BIAS_MAG = 2.0 / 255.0
-LINE_ERR_FILTER_ALPHA = 0.32
-LINE_ERR_DEADBAND = 0.015
-OMEGA_SLEW_PER_TICK = 0.080
+TURN_BIAS_MAG = 1.0 / 255.0
+LINE_ERR_FILTER_ALPHA = 0.26
+LINE_ERR_DEADBAND = 0.02
+OMEGA_SLEW_PER_TICK = 0.050
 
 # Intersection turn handling
 TURN_FORWARD_TIME = 0.2
@@ -353,7 +354,7 @@ def control_loop():
                 err_use = 0.0 if abs(line_err_f) < LINE_ERR_DEADBAND else line_err_f
 
                 turn_bias = 0.0
-                if abs(err_use) < 0.15:
+                if abs(err_use) < STRAIGHT_BAND:
                     if turn_direction.value == 'left':
                         turn_bias = TURN_BIAS_MAG
                     elif turn_direction.value == 'right':
@@ -368,7 +369,7 @@ def control_loop():
                     omega = 0.0
                 elif abs_err < SOFT_BAND:
                     steer_mode = 'soft'
-                    steer_gain = float(KP_TURN)
+                    steer_gain = float(KP_TURN_SOFT)
                     omega = -err_use * (steer_gain / 255.0) + turn_bias
                     omega = max(-OMEGA_MAX_FOLLOW, min(OMEGA_MAX_FOLLOW, omega))
                 else:
@@ -388,7 +389,7 @@ def control_loop():
                 if steer_mode == 'straight':
                     scale = 1.0
                 elif steer_mode == 'soft':
-                    scale = 0.95
+                    scale = 1.0
                 else:
                     scale = max(MIN_SPEED_SCALE, 1.0 - abs_err * TURN_SPEED_GAIN)
                 vy = VY_CMD * scale
