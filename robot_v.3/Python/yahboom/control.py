@@ -41,14 +41,15 @@ from mp_manager import (
 )
 
 # Motion tuning
+# Tuned for a low-mounted line camera (~12 cm) with front-grip/rear-slip wheels.
 KP_TURN = 95         # steering gain (scaled later)
-VY_CMD = 0.32        # forward component 0..1
+VY_CMD = 0.24        # slower forward component to reduce overshoot with short look-ahead
 VX_CMD = 0.0         # lateral component
 LOST_LINE_OMEGA = 0  # yaw when line lost (set small value to spin)
 IMU_TIMEOUT = 2.0    # seconds before we slow due to stale IMU
 
 # Heading hold when line lost
-YAW_HOLD_GAIN = 0.35  # adjust how aggressively to return to last heading
+YAW_HOLD_GAIN = 0.25  # softer heading hold for rear-slip chassis
 
 # Zone/ball tuning
 KP_BALL = 140        # steering gain when centering on ball
@@ -66,20 +67,20 @@ IR_BACK_DROP = 700
 TURN180_TIME = 1.0
 BACK_TIME = 1.0
 # Speed scaling on turns
-TURN_SPEED_GAIN = 0.65
-MIN_SPEED_SCALE = 0.45
-OMEGA_MAX_FOLLOW = 0.12
-OMEGA_MAX_RECOVER = 0.28
+TURN_SPEED_GAIN = 0.85
+MIN_SPEED_SCALE = 0.35
+OMEGA_MAX_FOLLOW = 0.10
+OMEGA_MAX_RECOVER = 0.18
 ERR_RECOVER_THRESH = 0.20
-KP_TURN_RECOVER = 200
-KP_TURN_SOFT = 70
-STRAIGHT_BAND = 0.12
-SOFT_BAND = 0.30
-OMEGA_MAX_SEARCH = 0.12
+KP_TURN_RECOVER = 135
+KP_TURN_SOFT = 48
+STRAIGHT_BAND = 0.10
+SOFT_BAND = 0.24
+OMEGA_MAX_SEARCH = 0.08
 TURN_BIAS_MAG = 1.0 / 255.0
-LINE_ERR_FILTER_ALPHA = 0.26
+LINE_ERR_FILTER_ALPHA = 0.18
 LINE_ERR_DEADBAND = 0.02
-OMEGA_SLEW_PER_TICK = 0.050
+OMEGA_SLEW_PER_TICK = 0.035
 
 # Intersection turn handling
 TURN_FORWARD_TIME = 0.2
@@ -102,7 +103,7 @@ TURN_MIN_FINAL_OMEGA = float(os.environ.get("TURN_MIN_FINAL_OMEGA", "0.22"))
 # Gap detection
 GAP_LOST_TIME = 0.4
 GAP_MAX_TIME = 0.7
-GAP_SPEED = 0.05
+GAP_SPEED = 0.04
 
 # Ramp detection (using pitch)
 RAMP_UP_PITCH = 10.0
