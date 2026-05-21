@@ -10,6 +10,7 @@ MOTOR_PERIOD = 0.03
 CONTROL_MAX = 255
 SPEED_MAX = 1000
 BRAKE_SETTLE_MS = 20
+BRAKE_HOLD_MS = 45
 
 # Map logical wheels to Yahboom M1..M4 order.
 # User mapping: M1 left, M2 left, M3 right, M4 right.
@@ -54,6 +55,7 @@ def motor_loop():
     init_driver()
     last_sent = (0, 0, 0, 0)
     last_send_time = 0.0
+    brake_hold_until = 0.0
     while not terminate.value:
         now = time.time()
         desired = (motor_fl.value, motor_fr.value, motor_bl.value, motor_br.value)
@@ -66,6 +68,11 @@ def motor_loop():
             brake(pulse_ms)
             last_sent = (0, 0, 0, 0)
             last_send_time = time.time()
+            brake_hold_until = last_send_time + (BRAKE_HOLD_MS / 1000.0)
+            continue
+
+        if now < brake_hold_until:
+            time.sleep(0.005)
             continue
 
         if changed or stale:

@@ -99,6 +99,8 @@ TURN_BRAKE_PULSE_MS = max(0, int(os.environ.get("TURN_BRAKE_PULSE_MS", "55")))
 TURN_SLOWDOWN_DEG = float(os.environ.get("TURN_SLOWDOWN_DEG", "22.0"))
 TURN_FINAL_OMEGA_SCALE = float(os.environ.get("TURN_FINAL_OMEGA_SCALE", "0.55"))
 TURN_MIN_FINAL_OMEGA = float(os.environ.get("TURN_MIN_FINAL_OMEGA", "0.22"))
+MANUAL_TURN_BRAKE_MS = max(0, int(os.environ.get("MANUAL_TURN_BRAKE_MS", "85")))
+MANUAL_TURN_RELEASE_THRESH = float(os.environ.get("MANUAL_TURN_RELEASE_THRESH", "0.12"))
 
 # Gap detection
 GAP_LOST_TIME = 0.4
@@ -199,6 +201,7 @@ def control_loop():
     ir_right_pending = 0
     line_err_f = 0.0
     omega_cmd_prev = 0.0
+    prev_manual_omega = 0.0
 
     while not terminate.value:
         # Calibration mode: freeze motors, set light on
@@ -254,8 +257,15 @@ def control_loop():
             omega = manual_omega.value
             vx = manual_vx.value
             vy = manual_vy.value
+            if abs(prev_manual_omega) >= MANUAL_TURN_RELEASE_THRESH:
+                released_turn = abs(omega) < MANUAL_TURN_RELEASE_THRESH
+                reversed_turn = omega * prev_manual_omega < 0.0 and abs(omega) >= MANUAL_TURN_RELEASE_THRESH
+                if released_turn or reversed_turn:
+                    turn_brake_ms.value = max(turn_brake_ms.value, MANUAL_TURN_BRAKE_MS)
+            prev_manual_omega = omega
             status.value = f"Manual vx={vx:.2f} vy={vy:.2f} om={omega:.2f}"
         elif objective.value == "follow_line":
+            prev_manual_omega = 0.0
             if STOP_ON_RED and red_line_detected.value and (abs(exit_angle.value) < EXIT_ANGLE_TOL or exit_angle.value == -181.0):
                 omega = 0.0
                 vx = 0.0
@@ -442,6 +452,7 @@ def control_loop():
                 status.value = "Silver detected -> zone"
 
         else:  # zone modes
+            prev_manual_omega = 0.0
             if zone_state in ["search", "approach"]:
                 zone_status.value = "find_balls"
             elif zone_state == "pick_prep":
