@@ -87,14 +87,17 @@ TURN_MIN_TIME = 0.25
 TURN_MAX_TIME = 1.6
 TURN_COOLDOWN = 0.8
 TURN_FORWARD_SPEED = 0.12
-TURN_OMEGA = 0.55
-TURN_AROUND_OMEGA = 0.65
+TURN_OMEGA = 0.48
+TURN_AROUND_OMEGA = 0.58
 TURN_REACQUIRE_ERR = 0.2
 TURN_USE_IMU = True
 TURN_ANGLE_DEG = 90.0
-TURN_IMU_TOL = 8.0
+TURN_IMU_TOL = 6.0
 IMU_YAW_SIGN = 1.0
-TURN_BRAKE_PULSE_MS = max(0, int(os.environ.get("TURN_BRAKE_PULSE_MS", "30")))
+TURN_BRAKE_PULSE_MS = max(0, int(os.environ.get("TURN_BRAKE_PULSE_MS", "55")))
+TURN_SLOWDOWN_DEG = float(os.environ.get("TURN_SLOWDOWN_DEG", "22.0"))
+TURN_FINAL_OMEGA_SCALE = float(os.environ.get("TURN_FINAL_OMEGA_SCALE", "0.55"))
+TURN_MIN_FINAL_OMEGA = float(os.environ.get("TURN_MIN_FINAL_OMEGA", "0.22"))
 
 # Gap detection
 GAP_LOST_TIME = 0.4
@@ -288,14 +291,26 @@ def control_loop():
                     vy = 0.0
                     imu_ready = TURN_USE_IMU and (now - imu_last_ts.value) < IMU_TIMEOUT
                     imu_done = False
+                    delta = 0.0
+                    remaining_deg = None
                     if imu_ready:
                         delta = ((imu_yaw.value - turn_start_yaw + 540.0) % 360.0 - 180.0) * IMU_YAW_SIGN
                         if turn_mode == "left":
+                            remaining_deg = max(0.0, TURN_ANGLE_DEG - delta)
                             imu_done = abs(delta - TURN_ANGLE_DEG) <= TURN_IMU_TOL
                         elif turn_mode == "right":
+                            remaining_deg = max(0.0, TURN_ANGLE_DEG - abs(delta))
                             imu_done = abs(delta + TURN_ANGLE_DEG) <= TURN_IMU_TOL
                         else:
+                            remaining_deg = max(0.0, 180.0 - abs(delta))
                             imu_done = abs(abs(delta) - 180.0) <= TURN_IMU_TOL
+
+                    if imu_ready and remaining_deg is not None and remaining_deg <= TURN_SLOWDOWN_DEG:
+                        turn_scale = max(TURN_FINAL_OMEGA_SCALE, remaining_deg / max(1.0, TURN_SLOWDOWN_DEG))
+                        if omega > 0:
+                            omega = max(TURN_MIN_FINAL_OMEGA, omega * turn_scale)
+                        else:
+                            omega = min(-TURN_MIN_FINAL_OMEGA, omega * turn_scale)
 
                     if (now - turn_start) > TURN_MIN_TIME:
                         if imu_done:
@@ -313,7 +328,10 @@ def control_loop():
                     time.sleep(0.02)
                     continue
 
-                status.value = f"Turn {turn_mode}"
+                if remaining_deg is not None:
+                    status.value = f"Turn {turn_mode} rem={remaining_deg:.1f}"
+                else:
+                    status.value = f"Turn {turn_mode}"
                 speeds = mix_drive(vx, vy, omega)
                 fl = int(255 * speeds["fl"])
                 fr = int(255 * speeds["fr"])

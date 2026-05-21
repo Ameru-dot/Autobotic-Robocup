@@ -9,6 +9,7 @@ MOTOR_PERIOD = 0.03
 
 CONTROL_MAX = 255
 SPEED_MAX = 1000
+BRAKE_SETTLE_MS = 20
 
 # Map logical wheels to Yahboom M1..M4 order.
 # User mapping: M1 left, M2 left, M3 right, M4 right.
@@ -38,10 +39,14 @@ def init_driver():
 def brake(pulse_ms: int = 30):
     pulse_ms = max(0, int(pulse_ms))
     try:
+        # Pause telemetry uploads first so the stop pulse reaches the driver cleanly.
+        motor.send_data("$upload:0,0,0#")
         motor.control_pwm(0, 0, 0, 0)
         if pulse_ms > 0:
             time.sleep(pulse_ms / 1000.0)
         motor.control_speed(0, 0, 0, 0)
+        if BRAKE_SETTLE_MS > 0:
+            time.sleep(BRAKE_SETTLE_MS / 1000.0)
     except Exception:
         pass
 
