@@ -9,8 +9,11 @@ MOTOR_PERIOD = 0.03
 
 CONTROL_MAX = 255
 SPEED_MAX = 1000
-BRAKE_SETTLE_MS = 20
-BRAKE_HOLD_MS = 45
+BRAKE_SETTLE_MS = 35
+BRAKE_HOLD_MS = 90
+BRAKE_HARDSTOP = True
+BRAKE_COUNTER_SCALE = 0.38
+BRAKE_COUNTER_MS = 35
 
 # Map logical wheels to Yahboom M1..M4 order.
 # User mapping: M1 left, M2 left, M3 right, M4 right.
@@ -22,6 +25,17 @@ MOTOR_INVERT = {"fl": False, "fr": False, "bl": False, "br": False}
 def scale_speed(value: int) -> int:
     scaled = int(value * SPEED_MAX / CONTROL_MAX)
     return max(-SPEED_MAX, min(SPEED_MAX, scaled))
+
+
+def desired_to_scaled(desired):
+    values = {"fl": desired[0], "fr": desired[1], "bl": desired[2], "br": desired[3]}
+    ordered = []
+    for key in MOTOR_ORDER:
+        val = values[key]
+        if MOTOR_INVERT.get(key, False):
+            val = -val
+        ordered.append(val)
+    return tuple(scale_speed(v) for v in ordered)
 
 
 def init_driver():
@@ -37,11 +51,17 @@ def init_driver():
 
 
 
-def brake(pulse_ms: int = 30):
+def brake(pulse_ms: int = 30, previous_desired=(0, 0, 0, 0)):
     pulse_ms = max(0, int(pulse_ms))
     try:
         # Pause telemetry uploads first so the stop pulse reaches the driver cleanly.
         motor.send_data("$upload:0,0,0#")
+        if BRAKE_HARDSTOP:
+            prev_scaled = desired_to_scaled(previous_desired)
+            counter = tuple(int(max(-SPEED_MAX, min(SPEED_MAX, -v * BRAKE_COUNTER_SCALE))) for v in prev_scaled)
+            if any(counter):
+                motor.control_speed(*counter)
+                time.sleep(BRAKE_COUNTER_MS / 1000.0)
         motor.control_pwm(0, 0, 0, 0)
         if pulse_ms > 0:
             time.sleep(pulse_ms / 1000.0)
@@ -65,7 +85,7 @@ def motor_loop():
         pulse_ms = int(turn_brake_ms.value)
         if pulse_ms > 0:
             turn_brake_ms.value = 0
-            brake(pulse_ms)
+            brake(pulse_ms, last_sent)
             last_sent = (0, 0, 0, 0)
             last_send_time = time.time()
             brake_hold_until = last_send_time + (BRAKE_HOLD_MS / 1000.0)
@@ -76,14 +96,7 @@ def motor_loop():
             continue
 
         if changed or stale:
-            values = {"fl": desired[0], "fr": desired[1], "bl": desired[2], "br": desired[3]}
-            ordered = []
-            for key in MOTOR_ORDER:
-                val = values[key]
-                if MOTOR_INVERT.get(key, False):
-                    val = -val
-                ordered.append(val)
-            scaled = tuple(scale_speed(v) for v in ordered)
+            scaled = desired_to_scaled(desired)
             motor.control_speed(*scaled)
             last_sent = desired
             last_send_time = now
